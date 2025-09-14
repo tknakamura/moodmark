@@ -1,0 +1,14 @@
+{
+  "project_name": "MOOD_MARK_Analytics",
+  "service_account_name": "mood-mark-analytics-service",
+  "apis_to_enable": [
+    "analyticsreporting.googleapis.com",
+    "analyticsdata.googleapis.com",
+    "searchconsole.googleapis.com",
+    "drive.googleapis.com",
+    "sheets.googleapis.com"
+  ],
+  "roles": [
+    "roles/editor"
+  ]
+}

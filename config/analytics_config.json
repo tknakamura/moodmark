@@ -1,0 +1,37 @@
+{
+  "data_collection": {
+    "ga4_date_range_days": 30,
+    "gsc_date_range_days": 30,
+    "top_pages_limit": 100,
+    "top_queries_limit": 100
+  },
+  "reporting": {
+    "auto_report_enabled": true,
+    "report_frequency": "daily",
+    "looker_studio_enabled": true
+  },
+  "alerts": {
+    "performance_threshold": {
+      "bounce_rate": 0.7,
+      "avg_position": 10,
+      "ctr": 0.02
+    },
+    "email_notifications": false
+  },
+  "sites": {
+    "moodmark_idea": {
+      "url": "https://isetan.mistore.jp/moodmarkgift/",
+      "ga4_property_id": "your-ga4-property-id-for-idea",
+      "gsc_site_url": "https://isetan.mistore.jp/moodmarkgift/"
+    },
+    "moodmark": {
+      "url": "https://isetan.mistore.jp/moodmark/",
+      "ga4_property_id": "your-ga4-property-id-for-main",
+      "gsc_site_url": "https://isetan.mistore.jp/moodmark/"
+    }
+  },
+  "looker_studio": {
+    "dashboard_folder_id": "your-dashboard-folder-id",
+    "data_source_folder_id": "your-data-source-folder-id"
+  }
+}
