@@ -1,0 +1,302 @@
+/* MOO:D MARK IDEA 商品推奨ダッシュボード スタイル */
+
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #17a2b8;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+}
+
+body {
+    font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo UI', sans-serif;
+    background-color: #f8f9fa;
+    line-height: 1.6;
+}
+
+/* ヘッダー */
+header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #0056b3 100%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* カード */
+.card {
+    border: none;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1) !important;
+}
+
+.card-header {
+    border-radius: 12px 12px 0 0 !important;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+/* フォーム */
+.form-control, .form-select {
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--dark-color);
+    margin-bottom: 8px;
+}
+
+/* ボタン */
+.btn {
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #0056b3 100%);
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    transform: translateY(-1px);
+}
+
+.btn-lg {
+    padding: 12px 24px;
+    font-size: 1.1rem;
+}
+
+/* 推奨商品カード */
+.recommendation-card {
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.recommendation-card:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.recommendation-card .card-header {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 2px solid #dee2e6;
+    padding: 15px 20px;
+}
+
+.recommendation-card .card-body {
+    padding: 20px;
+}
+
+.product-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--dark-color);
+    margin-bottom: 8px;
+}
+
+.product-id {
+    font-size: 0.9rem;
+    color: var(--secondary-color);
+    font-family: 'Courier New', monospace;
+    background-color: #f8f9fa;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.catch-copy {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 15px 0;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(0,123,255,0.1) 0%, rgba(0,123,255,0.05) 100%);
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.body-copy {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--dark-color);
+    margin: 15px 0;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    white-space: pre-line;
+}
+
+.recommendation-reasons {
+    margin: 15px 0;
+}
+
+.reason-tag {
+    display: inline-block;
+    background-color: var(--success-color);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    margin: 2px 4px 2px 0;
+    font-weight: 500;
+}
+
+.product-url {
+    margin-top: 15px;
+}
+
+.product-url a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.product-url a:hover {
+    text-decoration: underline;
+}
+
+.score-badge {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+}
+
+.price-badge {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--danger-color);
+}
+
+/* ローディング */
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* システム状況 */
+.badge {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+}
+
+/* レスポンシブ */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding: 0 15px;
+    }
+    
+    .card {
+        margin-bottom: 20px;
+    }
+    
+    .btn-lg {
+        padding: 10px 20px;
+        font-size: 1rem;
+    }
+    
+    .product-name {
+        font-size: 1.1rem;
+    }
+    
+    .catch-copy {
+        font-size: 1rem;
+    }
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* カスタムスクロールバー */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #0056b3;
+}
+
+/* フォーカス状態 */
+.form-control:focus,
+.form-select:focus,
+.btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+}
+
+/* ツールチップ */
+.tooltip {
+    font-size: 0.8rem;
+}
+
+/* バッジ */
+.badge {
+    font-weight: 500;
+}
+
+/* アイコン */
+.fas, .far {
+    transition: all 0.3s ease;
+}
+
+.btn:hover .fas,
+.btn:hover .far {
+    transform: scale(1.1);
+}
+
+/* エラーメッセージ */
+.alert {
+    border-radius: 8px;
+    border: none;
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, rgba(220,53,69,0.1) 0%, rgba(220,53,69,0.05) 100%);
+    color: var(--danger-color);
+    border-left: 4px solid var(--danger-color);
+}
+
+/* 成功メッセージ */
+.alert-success {
+    background: linear-gradient(135deg, rgba(40,167,69,0.1) 0%, rgba(40,167,69,0.05) 100%);
+    color: var(--success-color);
+    border-left: 4px solid var(--success-color);
+}
