@@ -1,4 +1,5 @@
-# CSV to HTML Converter Dashboard
+# MOO:D MARK｜CSV to HTML コンバーター
+*developed by Takeshi Nakamura*
 
 結婚祝いお菓子記事のCSVファイルをHTMLに変換するダッシュボードです。
 

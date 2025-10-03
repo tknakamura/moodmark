@@ -1,4 +1,5 @@
-# 🎉 MOO:D MARK CSV to HTML コンバーター 完成レポート
+# 🎉 MOO:D MARK｜CSV to HTML コンバーター 完成レポート
+*developed by Takeshi Nakamura*
 
 ## 📋 プロジェクト概要
 
