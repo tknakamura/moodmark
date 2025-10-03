@@ -589,12 +589,12 @@ class CSVToHTMLConverter:
 
 def main():
     st.set_page_config(
-        page_title="MOO:D MARK CSV to HTML Converter",
+        page_title="MOODMARK CSV to HTML Converter",
         page_icon="📄",
         layout="wide"
     )
     
-    st.title("MOO:D MARK｜CSV to HTML コンバーター")
+    st.title("MOODMARK｜CSV to HTML コンバーター")
     st.markdown('<p style="font-size: 14px; color: #666; text-align: center; margin-top: -10px;">developed by Takeshi Nakamura</p>', unsafe_allow_html=True)
     st.markdown("---")
     

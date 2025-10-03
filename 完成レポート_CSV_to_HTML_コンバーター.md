@@ -1,9 +1,9 @@
-# 🎉 MOO:D MARK｜CSV to HTML コンバーター 完成レポート
+# 🎉 MOODMARK｜CSV to HTML コンバーター 完成レポート
 *developed by Takeshi Nakamura*
 
 ## 📋 プロジェクト概要
 
-**プロジェクト名**: MOO:D MARK CSV to HTML コンバーター  
+**プロジェクト名**: MOODMARK CSV to HTML コンバーター  
 **開発期間**: 2025年10月4日  
 **目的**: CSVファイルから元のHTMLファイルとほぼ同一の構造を持つHTMLを自動生成するダッシュボードの開発
 
@@ -101,7 +101,7 @@ streamlit run csv_to_html_dashboard.py --server.port 8502
 
 ### 2. アクセス
 - **URL**: http://localhost:8502
-- **タイトル**: MOO:D MARK｜CSV to HTML コンバーター
+- **タイトル**: MOODMARK｜CSV to HTML コンバーター
 
 ### 3. 操作手順
 1. CSVファイルをアップロード
@@ -180,7 +180,7 @@ streamlit run csv_to_html_dashboard.py --server.port 8502
 
 ## 📝 まとめ
 
-**MOO:D MARK CSV to HTML コンバーター**は、CSVファイルから元のHTMLファイルと98.2%一致する高品質なHTMLを自動生成するダッシュボードとして完成しました。
+**MOODMARK CSV to HTML コンバーター**は、CSVファイルから元のHTMLファイルと98.2%一致する高品質なHTMLを自動生成するダッシュボードとして完成しました。
 
 ### 主要成果
 - ✅ **高精度**: 98.2%の一致率を達成
@@ -199,4 +199,4 @@ streamlit run csv_to_html_dashboard.py --server.port 8502
 
 **開発完了日**: 2025年10月4日  
 **開発者**: AI Assistant  
-**プロジェクト**: MOO:D MARK CSV to HTML コンバーター
+**プロジェクト**: MOODMARK CSV to HTML コンバーター
