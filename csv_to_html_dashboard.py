@@ -361,12 +361,18 @@ class CSVToHTMLConverter:
                 
                 elif tag == 'H4':
                     if current_h3:
-                        # 商品情報を取得
+                        # 商品情報を取得（最大4リンクまで対応）
                         url1 = str(row['URL（商品・リンク）①']).strip()
                         alt1 = str(row['alt（商品名）①']).strip()
                         span1 = str(row['span（商品名）①']).strip()
                         url2 = str(row['URL（商品・リンク）②']).strip()
                         span2 = str(row['span（商品名）②']).strip()
+                        
+                        # 3つ目と4つ目のリンクを取得（列が存在する場合）
+                        url3 = str(row.get('URL（商品・リンク）③', '')).strip() if 'URL（商品・リンク）③' in row else ''
+                        span3 = str(row.get('span（商品名）③', '')).strip() if 'span（商品名）③' in row else ''
+                        url4 = str(row.get('URL（商品・リンク）④', '')).strip() if 'URL（商品・リンク）④' in row else ''
+                        span4 = str(row.get('span（商品名）④', '')).strip() if 'span（商品名）④' in row else ''
                         
                         h4_item = {
                             'title': title_text,
@@ -388,6 +394,22 @@ class CSVToHTMLConverter:
                                 'url': url2,
                                 'alt': alt1,  # altは共通
                                 'span': span2 if span2 != 'nan' else alt1
+                            })
+                        
+                        # 商品3
+                        if url3 and url3 != 'nan':
+                            h4_item['products'].append({
+                                'url': url3,
+                                'alt': alt1,  # altは共通
+                                'span': span3 if span3 != 'nan' else alt1
+                            })
+                        
+                        # 商品4
+                        if url4 and url4 != 'nan':
+                            h4_item['products'].append({
+                                'url': url4,
+                                'alt': alt1,  # altは共通
+                                'span': span4 if span4 != 'nan' else alt1
                             })
                         
                         current_h3['h4_items'].append(h4_item)
