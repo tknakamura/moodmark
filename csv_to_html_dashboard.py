@@ -13,8 +13,10 @@ import base64
 from io import StringIO
 
 class CSVToHTMLConverter:
-    def __init__(self):
+    def __init__(self, article_cgid='S010117', ranking_cgid='J011403'):
         self.html_template = self._load_html_template()
+        self.article_cgid = article_cgid  # 記事の商品リンクに使用するcgid
+        self.ranking_cgid = ranking_cgid  # ランキングスライダーに使用するcgid
     
     def _load_html_template(self):
         """HTMLテンプレートを読み込み"""
@@ -454,7 +456,7 @@ class CSVToHTMLConverter:
                             content += f'''
                 <!-- アイテムここから -->
                 <li class="slide">
-                    <a href="{ranking_data['url']}?cgid=J011403">
+                    <a href="$url('Product-Show','pid','{product_id}')$?cgid={self.ranking_cgid}">
                         <div class="img">
                             <img alt="{ranking_data['alt']}" data-echo="assets/images/s_article/{product_id}.jpg?$staticlink$"
                                 src="assets/images/top/img_dummy.gif?$staticlink$">
@@ -483,8 +485,13 @@ class CSVToHTMLConverter:
                 else:
                     # 通常のH3アイテムを生成
                     for h3_item in section['h3_items']:
+                        # H3タイトルを追加
                         content += f'''
   <h3 class="section-subtitle">{h3_item['title']}</h3><br>
+'''
+                        # descriptionがnan以外の場合のみ追加
+                        if h3_item['description'] and h3_item['description'] != 'nan':
+                            content += f'''
   <p class="text">{h3_item['description']}</p>
 '''
                         
@@ -510,16 +517,17 @@ class CSVToHTMLConverter:
                                 for i, product in enumerate(h4_item['products']):
                                     if i > 0:
                                         content += '<br>'
+                                    product_id = self._extract_product_id(product['url'])
                                     content += f'''
-      <a href="{product['url']}?cgid=S010117" class="item">
+      <a href="$url('Product-Show','pid','{product_id}')$?cgid={self.article_cgid}" class="item">
         <span class="text">{product['span']}</span>
         <img src="assets/images/s_article/ico_circle_arrow.svg?$staticlink$" alt="詳しくはこちら" class="img">
       </a>
       <p class="price">
-        $include('Product-GetIncTaxPrice', 'pid', '{self._extract_product_id(product['url'])}')$
+        $include('Product-GetIncTaxPrice', 'pid', '{product_id}')$
       </p>
       <div class="tags">
-        $include('Product-GetProductTags', 'pid', '{self._extract_product_id(product['url'])}')$
+        $include('Product-GetProductTags', 'pid', '{product_id}')$
       </div>
 '''
                                 
@@ -603,8 +611,9 @@ def main():
         st.header("📋 使用方法")
         st.markdown("""
         1. CSVファイルをアップロード
-        2. プレビューで内容を確認
-        3. HTMLをダウンロード
+        2. cgidパラメータを設定
+        3. プレビューで内容を確認
+        4. HTMLをダウンロード
         
         **CSV形式:**
         - タグ列: title, description, H2, H3, H4
@@ -612,6 +621,24 @@ def main():
         - 説明列: 説明文
         - URL列: 商品リンク
         """)
+        
+        st.header("⚙️ 設定")
+        st.markdown("**cgidパラメータ設定**")
+        st.markdown("記事IDに応じて適切なcgidを設定してください。")
+        
+        article_cgid = st.text_input(
+            "記事の商品リンク用cgid",
+            value="S010117",
+            help="通常の商品リンク（item-box内）に使用されるcgidパラメータ"
+        )
+        
+        ranking_cgid = st.text_input(
+            "ランキングスライダー用cgid",
+            value="J011403",
+            help="ランキングスライダー内の商品リンクに使用されるcgidパラメータ"
+        )
+        
+        st.markdown("---")
         
         st.header("📁 サンプルファイル")
         with open("csv/MOODMARK｜結婚祝い お菓子 - to中村さん結婚祝い お菓子｜改善案 コピー.csv", "r", encoding="utf-8") as f:
@@ -625,7 +652,7 @@ def main():
         )
     
     # メインエリア
-    converter = CSVToHTMLConverter()
+    converter = CSVToHTMLConverter(article_cgid=article_cgid, ranking_cgid=ranking_cgid)
     
     # ファイルアップロード
     uploaded_file = st.file_uploader(
