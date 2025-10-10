@@ -21,6 +21,7 @@ class CSVToHTMLConverter:
     def _load_html_template(self):
         """HTMLテンプレートを読み込み"""
         return """
+<meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" type="text/css" href="assets/css/c_article.css?$staticlink$">
 
 <script src="assets/js/jquery.min.js?$staticlink$"></script>

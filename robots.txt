@@ -1,0 +1,26 @@
+# すべての検索エンジンに対してクロールを禁止
+User-agent: *
+Disallow: /
+
+# Googlebot（Google検索）
+User-agent: Googlebot
+Disallow: /
+
+# Bingbot（Bing検索）
+User-agent: Bingbot
+Disallow: /
+
+# Yandexbot（Yandex検索）
+User-agent: Yandexbot
+Disallow: /
+
+# その他の主要な検索エンジン
+User-agent: Slurp
+Disallow: /
+
+User-agent: DuckDuckBot
+Disallow: /
+
+User-agent: Baiduspider
+Disallow: /
+
