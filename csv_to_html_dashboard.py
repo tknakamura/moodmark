@@ -6,6 +6,7 @@ CSV to HTML Converter Dashboard
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import re
 from datetime import datetime
@@ -625,26 +626,19 @@ def main():
         layout="wide"
     )
     
-    # Google Tag Manager
-    gtm_head = """
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    # Google Tag Manager - Streamlitではcomponents.htmlを使用
+    gtm_script = """
+    <script>
+    (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-KLXFVW7G');</script>
-    <!-- End Google Tag Manager -->
-    """
-    
-    gtm_body = """
-    <!-- Google Tag Manager (noscript) -->
+    })(window,document,'script','dataLayer','GTM-KLXFVW7G');
+    </script>
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KLXFVW7G"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->
     """
-    
-    st.markdown(gtm_head, unsafe_allow_html=True)
-    st.markdown(gtm_body, unsafe_allow_html=True)
+    components.html(gtm_script, height=0)
     
     st.title("MOODMARK｜CSV to HTML コンバーター")
     st.markdown('<p style="font-size: 14px; color: #666; text-align: center; margin-top: -10px;">developed by Takeshi Nakamura</p>', unsafe_allow_html=True)
