@@ -626,17 +626,39 @@ def main():
         layout="wide"
     )
     
-    # Google Tag Manager - Streamlitではcomponents.htmlを使用
+    # Google Tag Manager - 親ウィンドウに動的に挿入
     gtm_script = """
     <script>
-    (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-KLXFVW7G');
+    (function() {
+        // 親ウィンドウのdocumentにアクセス
+        var doc = window.parent.document;
+        
+        // GTMスクリプトが既に存在するかチェック
+        if (!doc.querySelector('script[src*="googletagmanager.com/gtm.js"]')) {
+            // GTMスクリプトを親ウィンドウのheadに追加
+            (function(w,d,s,l,i){
+                w[l]=w[l]||[];
+                w[l].push({'gtm.start': new Date().getTime(),event:'gtm.js'});
+                var f=d.getElementsByTagName(s)[0],
+                j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+                j.async=true;
+                j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+                f.parentNode.insertBefore(j,f);
+            })(window.parent,doc,'script','dataLayer','GTM-KLXFVW7G');
+            
+            // noscriptタグを追加
+            var noscript = doc.createElement('noscript');
+            var iframe = doc.createElement('iframe');
+            iframe.src = 'https://www.googletagmanager.com/ns.html?id=GTM-KLXFVW7G';
+            iframe.height = '0';
+            iframe.width = '0';
+            iframe.style.display = 'none';
+            iframe.style.visibility = 'hidden';
+            noscript.appendChild(iframe);
+            doc.body.insertBefore(noscript, doc.body.firstChild);
+        }
+    })();
     </script>
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KLXFVW7G"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     """
     components.html(gtm_script, height=0)
     
