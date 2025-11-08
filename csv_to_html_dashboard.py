@@ -294,7 +294,13 @@ class CSVToHTMLConverter:
         try:
             # CSVを読み込み
             df = pd.read_csv(StringIO(csv_content))
-            
+
+            def clean_value(value):
+                if pd.isna(value):
+                    return ''
+                val = str(value).strip()
+                return '' if val.lower() == 'nan' else val
+
             # データを整理
             parsed_data = {
                 'title': '',
@@ -305,12 +311,13 @@ class CSVToHTMLConverter:
             
             current_section = None
             current_h3 = None
+            current_h4 = None
             
             for index, row in df.iterrows():
-                tag = str(row['タグ']).strip()
-                title_text = str(row['title or description or heedline']).strip()
-                description_text = str(row['見出し下に＜p＞タグを入れる場合のテキスト']).strip()
-                
+                tag = clean_value(row['タグ'])
+                title_text = clean_value(row['title or description or heedline'])
+                description_text = clean_value(row['見出し下に＜p＞タグを入れる場合のテキスト'])
+
                 if tag == 'title':
                     parsed_data['title'] = title_text
                 elif tag == 'description':
@@ -333,6 +340,9 @@ class CSVToHTMLConverter:
                         'id': current_section['id']
                     })
                     
+                    current_h3 = None
+                    current_h4 = None
+
                 elif tag == 'H3':
                     if current_section:
                         # ランキングH3かどうかを判定（【数字位】で始まる）
@@ -345,18 +355,19 @@ class CSVToHTMLConverter:
                             'is_ranking': is_ranking,
                             'ranking_data': None
                         }
-                        
+                        current_h4 = None
+
                         # ランキングの場合、商品情報を取得
                         if is_ranking:
-                            url1 = str(row['URL（商品・リンク）①']).strip()
-                            alt1 = str(row['alt（商品名）①']).strip()
-                            span1 = str(row['span（商品名）①']).strip()
+                            url1 = clean_value(row['URL（商品・リンク）①'])
+                            alt1 = clean_value(row['alt（商品名）①'])
+                            span1 = clean_value(row['span（商品名）①'])
                             
-                            if url1 and url1 != 'nan':
+                            if url1:
                                 current_h3['ranking_data'] = {
                                     'url': url1,
                                     'alt': alt1,
-                                    'span': span1 if span1 != 'nan' else alt1
+                                    'span': span1 or alt1
                                 }
                         
                         current_section['h3_items'].append(current_h3)
@@ -364,57 +375,73 @@ class CSVToHTMLConverter:
                 elif tag == 'H4':
                     if current_h3:
                         # 商品情報を取得（最大4リンクまで対応）
-                        url1 = str(row['URL（商品・リンク）①']).strip()
-                        alt1 = str(row['alt（商品名）①']).strip()
-                        span1 = str(row['span（商品名）①']).strip()
-                        url2 = str(row['URL（商品・リンク）②']).strip()
-                        span2 = str(row['span（商品名）②']).strip()
+                        url1 = clean_value(row['URL（商品・リンク）①'])
+                        alt1 = clean_value(row['alt（商品名）①'])
+                        span1 = clean_value(row['span（商品名）①'])
+                        url2 = clean_value(row['URL（商品・リンク）②'])
+                        span2 = clean_value(row['span（商品名）②'])
                         
                         # 3つ目と4つ目のリンクを取得（列が存在する場合）
-                        url3 = str(row.get('URL（商品・リンク）③', '')).strip() if 'URL（商品・リンク）③' in row else ''
-                        span3 = str(row.get('span（商品名）③', '')).strip() if 'span（商品名）③' in row else ''
-                        url4 = str(row.get('URL（商品・リンク）④', '')).strip() if 'URL（商品・リンク）④' in row else ''
-                        span4 = str(row.get('span（商品名）④', '')).strip() if 'span（商品名）④' in row else ''
+                        url3 = clean_value(row.get('URL（商品・リンク）③', '')) if 'URL（商品・リンク）③' in row else ''
+                        span3 = clean_value(row.get('span（商品名）③', '')) if 'span（商品名）③' in row else ''
+                        url4 = clean_value(row.get('URL（商品・リンク）④', '')) if 'URL（商品・リンク）④' in row else ''
+                        span4 = clean_value(row.get('span（商品名）④', '')) if 'span（商品名）④' in row else ''
                         
                         h4_item = {
                             'title': title_text,
                             'description': description_text,
-                            'products': []
+                            'products': [],
+                            'slider_items': []
                         }
                         
                         # 商品1
-                        if url1 and url1 != 'nan':
+                        if url1:
                             h4_item['products'].append({
                                 'url': url1,
                                 'alt': alt1,
-                                'span': span1 if span1 != 'nan' else alt1
+                                'span': span1 or alt1
                             })
                         
                         # 商品2
-                        if url2 and url2 != 'nan':
+                        if url2:
                             h4_item['products'].append({
                                 'url': url2,
                                 'alt': alt1,  # altは共通
-                                'span': span2 if span2 != 'nan' else alt1
+                                'span': span2 or alt1
                             })
                         
                         # 商品3
-                        if url3 and url3 != 'nan':
+                        if url3:
                             h4_item['products'].append({
                                 'url': url3,
                                 'alt': alt1,  # altは共通
-                                'span': span3 if span3 != 'nan' else alt1
+                                'span': span3 or alt1
                             })
                         
                         # 商品4
-                        if url4 and url4 != 'nan':
+                        if url4:
                             h4_item['products'].append({
                                 'url': url4,
                                 'alt': alt1,  # altは共通
-                                'span': span4 if span4 != 'nan' else alt1
+                                'span': span4 or alt1
                             })
                         
                         current_h3['h4_items'].append(h4_item)
+                        current_h4 = h4_item
+                elif tag == 'pタグ':
+                    if current_h4:
+                        slider_title = title_text
+                        slider_url = clean_value(row['URL（商品・リンク）①'])
+                        slider_alt = clean_value(row['alt（商品名）①'])
+                        slider_span = clean_value(row['span（商品名）①'])
+
+                        if slider_url:
+                            current_h4['slider_items'].append({
+                                'title': slider_title or slider_span or slider_alt,
+                                'url': slider_url,
+                                'alt': slider_alt or slider_title or slider_span,
+                                'span': slider_span or slider_title or slider_alt
+                            })
             
             # 最後のセクションを追加
             if current_section:
@@ -523,16 +550,23 @@ class CSVToHTMLConverter:
                         for h4_item in h3_item['h4_items']:
                             if h4_item['products']:
                                 # 商品ボックス生成
+                                primary_product_id = self._extract_product_id(h4_item['products'][0]['url'])
+                                primary_alt = h4_item['products'][0]['alt']
                                 content += f'''
   <!-- アイテム ここから -->
   <div class="item-box">
     <div class="box">
       <h4 class="item-box-subtitle">{h4_item['title']}</h4>
+'''
+                                if h4_item['description']:
+                                    content += f'''
       <p class="text">{h4_item['description']}</p>
+'''
+                                content += f'''
       <div class="img-box">
         <img src="assets/images/top/img_dummy.gif?$staticlink$"
-          data-echo="assets/images/s_article/{self._extract_product_id(h4_item['products'][0]['url'])}.jpg?$staticlink$" 
-          alt="{h4_item['products'][0]['alt']}" class="img">
+          data-echo="assets/images/s_article/{primary_product_id}.jpg?$staticlink$" 
+          alt="{primary_alt}" class="img">
       </div>
       <div class="link">
 '''
@@ -560,8 +594,8 @@ class CSVToHTMLConverter:
     </div>
     <div class="box img-box">
       <img src="assets/images/top/img_dummy.gif?$staticlink$"
-        data-echo="assets/images/s_article/''' + self._extract_product_id(h4_item['products'][0]['url']) + '''.jpg?$staticlink$" 
-        alt="''' + h4_item['products'][0]['alt'] + '''" class="img">
+        data-echo="assets/images/s_article/''' + primary_product_id + '''.jpg?$staticlink$" 
+        alt="''' + primary_alt + '''" class="img">
     </div>
   </div>
   <!-- アイテム ここまで -->
@@ -570,7 +604,51 @@ class CSVToHTMLConverter:
                                 # 商品なしのH4
                                 content += f'''
   <h4 class="item-box-subtitle">{h4_item['title']}</h4>
+'''
+                                if h4_item['description']:
+                                    content += f'''
   <p class="text">{h4_item['description']}</p>
+'''
+
+                            slider_items = h4_item.get('slider_items', [])
+                            if slider_items:
+                                content += '''
+  <!-- スライダーコンテナ ここから -->
+  <div class="slider-container sub-slider">
+        <div class="box-slider">
+            <ul class="slider slider-type11">
+'''
+                                for slider_item in slider_items:
+                                    product_id = self._extract_product_id(slider_item['url'])
+                                    alt_text = slider_item['alt']
+                                    display_text = slider_item['span']
+                                    content += f'''
+                <!-- アイテムここから -->
+                <li class="slide">
+                    <a href="$url('Product-Show','pid','{product_id}')$?cgid={self.article_cgid}">
+                        <div class="img">
+                            <img alt="{alt_text}" data-echo="assets/images/s_article/{product_id}.jpg?$staticlink$"
+                                src="assets/images/top/img_dummy.gif?$staticlink$">
+                        </div>
+                        <div class="texts">
+                            <p class="title">{display_text}</p>
+                            <p class="price">
+                                $include('Product-GetIncTaxPrice', 'pid', '{product_id}')$
+                            </p>
+                            <div class="tags">
+                                $include('Product-GetProductTags', 'pid', '{product_id}')$
+                            </div>
+                        </div>
+                    </a>
+                </li>
+                <!-- アイテムここまで -->
+'''
+                                content += '''
+            </ul>
+            <div class="slider-dots gray"></div>
+        </div>
+    </div><br><br>
+  <!-- スライダーコンテナ ここまで -->
 '''
                 
                 content += '''
@@ -613,8 +691,8 @@ class CSVToHTMLConverter:
         if not url or url == 'nan':
             return 'dummy'
         
-        # URLから商品IDを抽出（例: MM-0410771005508）
-        match = re.search(r'MM-[\w-]+', url)
+        # URLから商品IDを抽出（例: MM-0410771005508, MMV-4580435590216）
+        match = re.search(r'MM[A-Z0-9]*-[\w-]+', url)
         if match:
             return match.group(0)
         return 'dummy'
