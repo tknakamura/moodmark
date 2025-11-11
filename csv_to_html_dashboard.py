@@ -22,7 +22,6 @@ class CSVToHTMLConverter:
     def _load_html_template(self):
         """HTMLテンプレートを読み込み"""
         return """
-<meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" type="text/css" href="assets/css/c_article.css?$staticlink$">
 
 <script src="assets/js/jquery.min.js?$staticlink$"></script>
@@ -548,6 +547,8 @@ class CSVToHTMLConverter:
                         
                         # H4アイテムを処理
                         for h4_item in h3_item['h4_items']:
+                            slider_items = h4_item.get('slider_items', [])
+
                             if h4_item['products']:
                                 # 商品ボックス生成
                                 primary_product_id = self._extract_product_id(h4_item['products'][0]['url'])
@@ -600,29 +601,26 @@ class CSVToHTMLConverter:
   </div>
   <!-- アイテム ここまで -->
 '''
-                            else:
-                                # 商品なしのH4
-                                content += f'''
-  <h4 class="item-box-subtitle">{h4_item['title']}</h4>
-'''
-                                if h4_item['description']:
-                                    content += f'''
-  <p class="text">{h4_item['description']}</p>
-'''
-
-                            slider_items = h4_item.get('slider_items', [])
-                            if slider_items:
-                                content += '''
+                                if slider_items:
+                                    content += '''
   <!-- スライダーコンテナ ここから -->
-  <div class="slider-container sub-slider">
+  <div class="slider-container">
+        <h4 class="slider-title">
+            <span class="sub">
+                <span class="text">'''+ h4_item['title'] + '''</span>
+            </span>
+            <span class="main">
+                <span class="text">DISCOVER MORE</span>
+            </span>
+        </h4>
         <div class="box-slider">
             <ul class="slider slider-type11">
 '''
-                                for slider_item in slider_items:
-                                    product_id = self._extract_product_id(slider_item['url'])
-                                    alt_text = slider_item['alt']
-                                    display_text = slider_item['span']
-                                    content += f'''
+                                    for slider_item in slider_items:
+                                        product_id = self._extract_product_id(slider_item['url'])
+                                        alt_text = slider_item['alt']
+                                        display_text = slider_item['span']
+                                        content += f'''
                 <!-- アイテムここから -->
                 <li class="slide">
                     <a href="$url('Product-Show','pid','{product_id}')$?cgid={self.article_cgid}">
@@ -643,12 +641,74 @@ class CSVToHTMLConverter:
                 </li>
                 <!-- アイテムここまで -->
 '''
-                                content += '''
+                                    content += '''
             </ul>
             <div class="slider-dots gray"></div>
         </div>
     </div><br><br>
   <!-- スライダーコンテナ ここまで -->
+'''
+                            else:
+                                if slider_items:
+                                    if h4_item['description']:
+                                        content += f'''
+  <p class="text">{h4_item['description']}</p>
+'''
+                                    content += '''
+  <!-- スライダーコンテナ ここから -->
+  <div class="slider-container">
+        <h4 class="slider-title">
+            <span class="sub">
+                <span class="text">'''+ h4_item['title'] + '''</span>
+            </span>
+            <span class="main">
+                <span class="text">DISCOVER MORE</span>
+            </span>
+        </h4>
+        <div class="box-slider">
+            <ul class="slider slider-type11">
+'''
+                                    for slider_item in slider_items:
+                                        product_id = self._extract_product_id(slider_item['url'])
+                                        alt_text = slider_item['alt']
+                                        display_text = slider_item['span']
+                                        content += f'''
+                <!-- アイテムここから -->
+                <li class="slide">
+                    <a href="$url('Product-Show','pid','{product_id}')$?cgid={self.article_cgid}">
+                        <div class="img">
+                            <img alt="{alt_text}" data-echo="assets/images/s_article/{product_id}.jpg?$staticlink$"
+                                src="assets/images/top/img_dummy.gif?$staticlink$">
+                        </div>
+                        <div class="texts">
+                            <p class="title">{display_text}</p>
+                            <p class="price">
+                                $include('Product-GetIncTaxPrice', 'pid', '{product_id}')$
+                            </p>
+                            <div class="tags">
+                                $include('Product-GetProductTags', 'pid', '{product_id}')$
+                            </div>
+                        </div>
+                    </a>
+                </li>
+                <!-- アイテムここまで -->
+'''
+                                    content += '''
+            </ul>
+            <div class="slider-dots gray"></div>
+        </div>
+    </div><br><br>
+  <!-- スライダーコンテナ ここまで -->
+'''
+                                else:
+                                    # 商品・スライダーともに無い場合のフォールバック
+                                    if h4_item['title']:
+                                        content += f'''
+  <h4 class="item-box-subtitle">{h4_item['title']}</h4>
+'''
+                                    if h4_item['description']:
+                                        content += f'''
+  <p class="text">{h4_item['description']}</p>
 '''
                 
                 content += '''
