@@ -346,7 +346,12 @@ class CSVToHTMLConverter:
                     if current_section:
                         # ランキングH3かどうかを判定（様々な形式に対応）
                         # 【1位】、【第1位】、1位、第1位、1位：などに対応
-                        is_ranking = bool(re.search(r'[【(]?[第]?[0-9０-９]+位[）】]?[:：]?', title_text))
+                        # より確実に検出するため、数字+位のパターンを複数チェック
+                        is_ranking = bool(
+                            re.search(r'[【(]?[第]?[0-9０-９]+位[）】]?[:：]?', title_text) or
+                            re.search(r'^[0-9０-９]+位', title_text) or
+                            re.search(r'^[第]?[0-9０-９]+位[:：]', title_text)
+                        )
                         
                         current_h3 = {
                             'title': title_text,
@@ -359,15 +364,23 @@ class CSVToHTMLConverter:
 
                         # ランキングの場合、商品情報を取得
                         if is_ranking:
-                            url1 = clean_value(row['URL（商品・リンク）①'])
-                            alt1 = clean_value(row['alt（商品名）①'])
-                            span1 = clean_value(row['span（商品名）①'])
+                            url1 = clean_value(row.get('URL（商品・リンク）①', ''))
+                            alt1 = clean_value(row.get('alt（商品名）①', ''))
+                            span1 = clean_value(row.get('span（商品名）①', ''))
                             
+                            # URLがなくても、タイトルがあればランキングデータとして設定
                             if url1:
                                 current_h3['ranking_data'] = {
                                     'url': url1,
-                                    'alt': alt1,
-                                    'span': span1 or alt1
+                                    'alt': alt1 or title_text,
+                                    'span': span1 or alt1 or title_text
+                                }
+                            elif title_text:
+                                # URLがない場合でも、タイトルだけでもランキングデータとして設定
+                                current_h3['ranking_data'] = {
+                                    'url': '',
+                                    'alt': alt1 or title_text,
+                                    'span': span1 or alt1 or title_text
                                 }
                         
                         current_section['h3_items'].append(current_h3)
