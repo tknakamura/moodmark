@@ -344,8 +344,9 @@ class CSVToHTMLConverter:
 
                 elif tag == 'H3':
                     if current_section:
-                        # ランキングH3かどうかを判定（【数字位】で始まる）
-                        is_ranking = title_text.startswith('【') and '位】' in title_text
+                        # ランキングH3かどうかを判定（様々な形式に対応）
+                        # 【1位】、【第1位】、1位、第1位、1位：などに対応
+                        is_ranking = bool(re.search(r'[【(]?[第]?[0-9０-９]+位[）】]?[:：]?', title_text))
                         
                         current_h3 = {
                             'title': title_text,
