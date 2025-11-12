@@ -616,13 +616,11 @@ class CSVToHTMLConverter:
   <!-- アイテム ここまで -->
 '''
                                 if slider_items:
-                                    content += '''
+                                    content += f'''
   <!-- スライダーコンテナ ここから -->
   <div class="slider-container">
         <h4 class="slider-title">
-            <span class="sub">
-                <span class="text">'''+ h4_item['title'] + '''</span>
-            </span>
+            <span class="sub">{h4_item['title']}</span>
             <span class="main">
                 <span class="text">DISCOVER MORE</span>
             </span>
