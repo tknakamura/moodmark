@@ -289,7 +289,14 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             
             if ga4_data.empty:
                 logger.warning("GA4データが空です。認証状態とAPI接続を確認してください。")
-                return {"error": "データが取得できませんでした。認証状態とAPI接続を確認してください。"}
+                return {
+                    "error": "GA4データが取得できませんでした。認証状態とAPI接続を確認してください。",
+                    "total_sessions": 0,
+                    "total_users": 0,
+                    "total_pageviews": 0,
+                    "avg_bounce_rate": 0.0,
+                    "avg_session_duration": 0.0
+                }
             
             summary = {
                 "total_sessions": int(ga4_data['sessions'].sum()) if 'sessions' in ga4_data.columns else 0,
@@ -342,8 +349,14 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             logger.info(f"GSCデータ取得完了: {len(gsc_data)}行")
             
             if gsc_data.empty:
-                logger.warning("GSCデータが空です。認証状態とAPI接続を確認してください。")
-                return {"error": "データが取得できませんでした。認証状態とAPI接続を確認してください。"}
+                logger.warning(f"GSCデータが空です（サイト: {site_name}）。認証状態とAPI接続を確認してください。")
+                return {
+                    "error": f"GSCデータが取得できませんでした（サイト: {site_name}）。認証状態とAPI接続を確認してください。",
+                    "total_clicks": 0,
+                    "total_impressions": 0,
+                    "avg_ctr": 0.0,
+                    "avg_position": 0.0
+                }
             
             # ページ別データを取得
             if start_date and end_date:
@@ -990,18 +1003,39 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             )
             
             if 'error' not in page_gsc_data:
+                clicks = page_gsc_data.get('clicks', 0)
+                impressions = page_gsc_data.get('impressions', 0)
+                
                 context_parts.append(f"=== 特定ページのGSCデータ: {urls[0]} ===")
                 if start_date and end_date:
                     context_parts.append(f"期間: {start_date} ～ {end_date}")
                 else:
                     context_parts.append(f"期間: 過去{date_range}日間")
-                context_parts.append(f"クリック数: {page_gsc_data.get('clicks', 0):,}")
-                context_parts.append(f"インプレッション数: {page_gsc_data.get('impressions', 0):,}")
+                context_parts.append(f"クリック数: {clicks:,}")
+                context_parts.append(f"インプレッション数: {impressions:,}")
                 context_parts.append(f"CTR: {page_gsc_data.get('ctr', 0):.2f}%")
                 context_parts.append(f"平均検索順位: {page_gsc_data.get('avg_position', 0):.2f}位")
+                
+                # データが0の場合も明示的に表示
+                if clicks == 0 and impressions == 0:
+                    context_parts.append("")
+                    context_parts.append("⚠️ 注意: この期間、このページのGSCデータが0件です。")
+                    context_parts.append("   - ページがまだインデックスされていない可能性があります")
+                    context_parts.append("   - 指定された期間に検索トラフィックがなかった可能性があります")
+                    context_parts.append("   - ページURLが正しいか確認してください")
+                
                 context_parts.append("")
             elif 'error' in page_gsc_data:
-                context_parts.append(f"⚠️ 特定ページのGSCデータ取得エラー: {page_gsc_data.get('error', 'Unknown error')}")
+                error_msg = page_gsc_data.get('error', 'Unknown error')
+                logger.warning(f"特定ページのGSCデータ取得エラー: {error_msg}")
+                context_parts.append(f"=== 特定ページのGSCデータ: {urls[0]} ===")
+                context_parts.append(f"❌ エラー: {error_msg}")
+                context_parts.append("")
+                context_parts.append("【考えられる原因】")
+                context_parts.append("- ページがまだGSCに登録されていない")
+                context_parts.append("- 指定された期間にデータが存在しない")
+                context_parts.append("- ページURLが正しくない")
+                context_parts.append("- GSC APIの認証エラー")
                 context_parts.append("")
         
         if needs_ga4:
@@ -1017,6 +1051,14 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 context_parts.append(f"総ページビュー数: {ga4_summary['total_pageviews']:,}")
                 context_parts.append(f"平均バウンス率: {ga4_summary['avg_bounce_rate']:.2%}")
                 context_parts.append(f"平均セッション時間: {ga4_summary['avg_session_duration']:.2f}秒")
+                context_parts.append("")
+            else:
+                # エラーが発生した場合もコンテキストに含める
+                error_msg = ga4_summary.get('error', 'Unknown error')
+                logger.warning(f"GA4データ取得エラー: {error_msg}")
+                context_parts.append("=== Google Analytics 4 (GA4) データ ===")
+                context_parts.append(f"❌ エラー: {error_msg}")
+                context_parts.append("GA4データが取得できませんでした。認証状態とAPI接続を確認してください。")
                 context_parts.append("")
         
         if needs_gsc:
@@ -1041,6 +1083,14 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                     context_parts.append("\n【トップ検索クエリ（クリック数順）】")
                     for i, query in enumerate(gsc_summary['top_queries'][:5], 1):
                         context_parts.append(f"{i}. {query.get('query', 'N/A')}: クリック数 {query.get('clicks', 0):,}, インプレッション数 {query.get('impressions', 0):,}")
+                context_parts.append("")
+            else:
+                # エラーが発生した場合もコンテキストに含める
+                error_msg = gsc_summary.get('error', 'Unknown error')
+                logger.warning(f"GSCデータ取得エラー: {error_msg}")
+                context_parts.append("=== Google Search Console (GSC) データ ===")
+                context_parts.append(f"❌ エラー: {error_msg}")
+                context_parts.append(f"GSCデータが取得できませんでした（サイト: {site_name}）。認証状態とAPI接続を確認してください。")
                 context_parts.append("")
         
         if not context_parts:
