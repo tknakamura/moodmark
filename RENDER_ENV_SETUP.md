@@ -106,11 +106,28 @@ Render.comで環境変数を設定する方法を説明します。
    ```
 3. Render.comの環境変数に `USE_PLAYWRIGHT=true` を追加
 4. 変更をコミット・プッシュしてデプロイ
-5. デプロイ後、Render.comのシェル（SSH）で以下を実行：
+5. **デプロイが完了したことを確認**（Render.comのダッシュボードで確認）
+6. Render.comのシェル（SSH）に接続し、以下を実行：
+   
+   **ステップ1**: Playwrightがインストールされているか確認
+   ```bash
+   python -m pip list | grep playwright
    ```
+   
+   **ステップ2**: もしPlaywrightがインストールされていない場合、手動でインストール
+   ```bash
+   python -m pip install playwright>=1.40.0
+   ```
+   
+   **ステップ3**: Chromiumブラウザをインストール
+   ```bash
    python -m playwright install chromium
    ```
-   **注意**: `playwright`コマンドではなく、`python -m playwright`として実行してください
+   
+   **注意**: 
+   - `playwright`コマンドではなく、`python -m playwright`として実行してください
+   - デプロイが完了していない場合、Playwrightがインストールされていない可能性があります
+   - その場合は、ステップ2で手動インストールしてください
 
 **注意事項**
 
