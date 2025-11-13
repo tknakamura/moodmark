@@ -579,7 +579,9 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 try:
                     # ページ取得開始
                     logger.info(f"  ステップ1: ページ取得を開始...")
-                    seo_analysis = self.seo_analyzer.analyze_page(url)
+                    # JavaScript実行環境の使用を環境変数で制御
+                    use_js = os.getenv('USE_SELENIUM', 'false').lower() == 'true' or os.getenv('USE_PLAYWRIGHT', 'false').lower() == 'true'
+                    seo_analysis = self.seo_analyzer.analyze_page(url, use_js=use_js)
                     
                     # 分析結果の検証
                     if 'error' in seo_analysis:
@@ -791,6 +793,47 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                         context_parts.append(f"  マイクロデータ: {structured.get('microdata_count', 0)}件")
                         context_parts.append(f"  RDFa: {structured.get('rdfa_count', 0)}件")
                         context_parts.append(f"  構造化データの有無: {'✓ あり' if structured.get('has_structured_data') else '✗ なし（追加推奨）'}")
+                        
+                        # スキーマタイプの詳細
+                        schema_types = structured.get('schema_types', [])
+                        if schema_types:
+                            context_parts.append(f"  検出されたスキーマタイプ: {', '.join(schema_types)}")
+                            context_parts.append(f"  総スキーマ数: {structured.get('total_schemas', 0)}")
+                        
+                        # スキーマ詳細
+                        schema_details = structured.get('schema_details', [])
+                        if schema_details:
+                            context_parts.append("")
+                            context_parts.append("  【スキーマ詳細】")
+                            for i, detail in enumerate(schema_details[:5], 1):  # 最大5個まで
+                                schema_type = detail.get('schema_type', 'Unknown')
+                                properties = detail.get('properties', {})
+                                context_parts.append(f"    {i}. {schema_type}")
+                                if properties:
+                                    prop_list = ', '.join(properties.keys())
+                                    context_parts.append(f"       プロパティ: {prop_list}")
+                        
+                        # 品質評価
+                        quality = structured.get('quality_score', {})
+                        if quality:
+                            context_parts.append("")
+                            context_parts.append(f"  品質スコア: {quality.get('score', 0)}/{quality.get('max_score', 100)}")
+                            if quality.get('issues'):
+                                context_parts.append("  【課題】")
+                                for issue in quality['issues']:
+                                    context_parts.append(f"    - {issue}")
+                            if quality.get('recommendations'):
+                                context_parts.append("  【推奨事項】")
+                                for rec in quality['recommendations']:
+                                    context_parts.append(f"    - {rec}")
+                        
+                        # JavaScriptで動的に生成される可能性の警告
+                        if structured.get('potential_js_structured_data'):
+                            context_parts.append("")
+                            context_parts.append("  ⚠️ 注意: JavaScriptで構造化データが動的に生成されている可能性があります")
+                            context_parts.append("    現在の解析方法では、JavaScriptで動的に生成される構造化データは検出できません")
+                            context_parts.append("    より正確な分析には、JavaScript実行環境（Selenium/Playwright）が必要です")
+                        
                         context_parts.append("")
                         
                         # リンク構造

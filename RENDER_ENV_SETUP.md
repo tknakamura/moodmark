@@ -77,7 +77,29 @@ Render.comで環境変数を設定する方法を説明します。
 - **Key**: `PAGESPEED_INSIGHTS_API_KEY`
 - **Value**: あなたのPage Speed Insights APIキー
 - **注意**: この環境変数はオプションです。設定しない場合、Page Speed Insightsの分析はスキップされます
-- **取得方法**: 
+- **取得方法**:
+
+#### 環境変数7: USE_PLAYWRIGHT（オプション、高度な機能）
+
+- **Key**: `USE_PLAYWRIGHT`
+- **Value**: `true` または `false`（デフォルト: `false`）
+- **注意**: JavaScriptで動的に生成される構造化データを検出する場合に使用
+- **要件**: `requirements.txt`で`playwright>=1.40.0`のコメントを外し、デプロイ後に`playwright install chromium`を実行する必要があります
+- **推奨**: PlaywrightはSeleniumより軽量で高速です
+
+#### 環境変数8: USE_SELENIUM（オプション、高度な機能）
+
+- **Key**: `USE_SELENIUM`
+- **Value**: `true` または `false`（デフォルト: `false`）
+- **注意**: JavaScriptで動的に生成される構造化データを検出する場合に使用（Playwrightの代替）
+- **要件**: `requirements.txt`で`selenium>=4.15.0`のコメントを外し、ChromeDriverの設定が必要です
+- **注意**: Render.comの無料プランでは制限がある可能性があります
+
+#### 環境変数9: CHROMEDRIVER_PATH（オプション、Selenium使用時のみ）
+
+- **Key**: `CHROMEDRIVER_PATH`
+- **Value**: ChromeDriverのパス（例: `/usr/local/bin/chromedriver`）
+- **注意**: Seleniumを使用する場合のみ必要。自動検出も試行されます 
   1. Google Cloud Consoleにアクセス
   2. プロジェクトを選択
   3. 「APIとサービス」→「ライブラリ」から「PageSpeed Insights API」を有効化

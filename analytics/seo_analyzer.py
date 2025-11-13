@@ -39,6 +39,118 @@ class SEOAnalyzer:
             'Upgrade-Insecure-Requests': '1',
         })
     
+    def fetch_page_with_js(self, url: str, timeout: int = 30) -> Optional[BeautifulSoup]:
+        """
+        JavaScriptを実行した後のページを取得（Selenium/Playwrightを使用）
+        
+        Args:
+            url (str): 取得するURL
+            timeout (int): タイムアウト（秒）
+            
+        Returns:
+            BeautifulSoup: パースされたHTML、エラー時はNone
+        """
+        # 環境変数でSelenium/Playwrightの使用を制御
+        use_selenium = os.getenv('USE_SELENIUM', 'false').lower() == 'true'
+        use_playwright = os.getenv('USE_PLAYWRIGHT', 'false').lower() == 'true'
+        
+        if not use_selenium and not use_playwright:
+            logger.info("JavaScript実行環境が無効です。静的HTML解析にフォールバックします")
+            return None
+        
+        try:
+            # Playwrightを優先（より軽量で高速）
+            if use_playwright:
+                try:
+                    from playwright.sync_api import sync_playwright
+                    
+                    logger.info(f"Playwrightでページ取得開始: {url}")
+                    with sync_playwright() as p:
+                        browser = p.chromium.launch(headless=True)
+                        page = browser.new_page()
+                        page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
+                        
+                        # 構造化データが読み込まれるまで少し待機
+                        page.wait_for_timeout(2000)
+                        
+                        html_content = page.content()
+                        browser.close()
+                        
+                        soup = BeautifulSoup(html_content, 'html.parser')
+                        logger.info(f"Playwrightでページ取得成功: {len(soup.find_all())} 要素")
+                        return soup
+                except ImportError:
+                    logger.warning("Playwrightがインストールされていません。Seleniumを試行します")
+                    if not use_selenium:
+                        return None
+                except Exception as e:
+                    logger.warning(f"Playwrightでページ取得エラー: {e}")
+                    if not use_selenium:
+                        return None
+            
+            # Seleniumを使用
+            if use_selenium:
+                try:
+                    from selenium import webdriver
+                    from selenium.webdriver.chrome.options import Options
+                    from selenium.webdriver.chrome.service import Service
+                    from selenium.webdriver.common.by import By
+                    from selenium.webdriver.support.ui import WebDriverWait
+                    from selenium.webdriver.support import expected_conditions as EC
+                    
+                    logger.info(f"Seleniumでページ取得開始: {url}")
+                    
+                    # Chromeオプション
+                    chrome_options = Options()
+                    chrome_options.add_argument('--headless')
+                    chrome_options.add_argument('--no-sandbox')
+                    chrome_options.add_argument('--disable-dev-shm-usage')
+                    chrome_options.add_argument('--disable-gpu')
+                    chrome_options.add_argument('--window-size=1920,1080')
+                    chrome_options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+                    
+                    # ChromeDriverのパス（環境変数から取得、または自動検出）
+                    driver_path = os.getenv('CHROMEDRIVER_PATH')
+                    
+                    if driver_path and os.path.exists(driver_path):
+                        service = Service(driver_path)
+                        driver = webdriver.Chrome(service=service, options=chrome_options)
+                    else:
+                        # 自動検出を試行
+                        driver = webdriver.Chrome(options=chrome_options)
+                    
+                    driver.set_page_load_timeout(timeout)
+                    driver.get(url)
+                    
+                    # 構造化データが読み込まれるまで待機
+                    try:
+                        WebDriverWait(driver, 5).until(
+                            EC.presence_of_element_located((By.TAG_NAME, "body"))
+                        )
+                        import time
+                        time.sleep(2)  # 追加の待機時間
+                    except Exception:
+                        pass
+                    
+                    html_content = driver.page_source
+                    driver.quit()
+                    
+                    soup = BeautifulSoup(html_content, 'html.parser')
+                    logger.info(f"Seleniumでページ取得成功: {len(soup.find_all())} 要素")
+                    return soup
+                except ImportError:
+                    logger.warning("Seleniumがインストールされていません")
+                    return None
+                except Exception as e:
+                    logger.error(f"Seleniumでページ取得エラー: {e}", exc_info=True)
+                    return None
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"JavaScript実行環境でのページ取得エラー: {e}", exc_info=True)
+            return None
+    
     def fetch_page(self, url: str, timeout: int = 30, retries: int = 3) -> Optional[BeautifulSoup]:
         """
         ページを取得してBeautifulSoupオブジェクトを返す
@@ -108,19 +220,36 @@ class SEOAnalyzer:
         
         return None
     
-    def analyze_page(self, url: str) -> Dict[str, Any]:
+    def analyze_page(self, url: str, use_js: bool = False) -> Dict[str, Any]:
         """
         ページの包括的なSEO分析を実行
         
         Args:
             url (str): 分析するURL
+            use_js (bool): JavaScript実行環境を使用するか（デフォルト: False）
             
         Returns:
             dict: SEO分析結果
         """
-        logger.info(f"SEO分析開始: {url}")
+        logger.info(f"SEO分析開始: {url} (use_js={use_js})")
         try:
-            soup = self.fetch_page(url)
+            # JavaScript実行が必要な場合は、まずJavaScript実行後のHTMLを取得
+            soup = None
+            js_executed = False
+            
+            if use_js:
+                logger.info("JavaScript実行環境でページを取得中...")
+                soup = self.fetch_page_with_js(url)
+                if soup:
+                    js_executed = True
+                    logger.info("JavaScript実行後のHTMLを取得しました")
+                else:
+                    logger.warning("JavaScript実行環境での取得に失敗。静的HTML解析にフォールバックします")
+            
+            # JavaScript実行に失敗した場合、またはuse_js=Falseの場合は静的HTML解析
+            if not soup:
+                soup = self.fetch_page(url)
+            
             if not soup:
                 error_msg = 'ページの取得に失敗しました。URLが正しいか、ページがアクセス可能か確認してください。'
                 logger.error(f"SEO分析失敗: {error_msg}")
@@ -136,6 +265,7 @@ class SEOAnalyzer:
                 analysis = {
                     'url': url,
                     'timestamp': datetime.now().isoformat(),
+                    'js_executed': js_executed,
                     'basic': self._analyze_basic_seo(soup),
                     'content': self._analyze_content(soup),
                     'technical': self._analyze_technical_seo(soup),
@@ -538,20 +668,48 @@ class SEOAnalyzer:
         }
     
     def _analyze_structured_data(self, soup: BeautifulSoup) -> Dict[str, Any]:
-        """構造化データの分析"""
+        """構造化データの分析（詳細版）"""
         structured_data = []
+        schema_types = []
+        schema_details = []
         
         # JSON-LD
         json_ld_scripts = soup.find_all('script', type='application/ld+json')
         for script in json_ld_scripts:
             try:
-                data = json.loads(script.string)
-                structured_data.append({
-                    'type': 'json-ld',
-                    'data': data
-                })
-            except (json.JSONDecodeError, AttributeError):
-                pass
+                script_content = script.string
+                if not script_content:
+                    continue
+                    
+                # JSON-LDデータを解析（配列またはオブジェクトの両方に対応）
+                try:
+                    data = json.loads(script_content)
+                    # 配列の場合は各要素を処理
+                    if isinstance(data, list):
+                        for item in data:
+                            structured_data.append({
+                                'type': 'json-ld',
+                                'data': item
+                            })
+                            schema_info = self._extract_schema_info(item)
+                            if schema_info:
+                                schema_types.append(schema_info['schema_type'])
+                                schema_details.append(schema_info)
+                    else:
+                        structured_data.append({
+                            'type': 'json-ld',
+                            'data': data
+                        })
+                        schema_info = self._extract_schema_info(data)
+                        if schema_info:
+                            schema_types.append(schema_info['schema_type'])
+                            schema_details.append(schema_info)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON-LD解析エラー: {e}")
+                    continue
+            except (AttributeError, TypeError) as e:
+                logger.warning(f"JSON-LDスクリプト解析エラー: {e}")
+                continue
         
         # マイクロデータ
         microdata_items = soup.find_all(attrs={'itemscope': True})
@@ -560,6 +718,10 @@ class SEOAnalyzer:
             itemtype = item.get('itemtype', '')
             if itemtype:
                 microdata_types.append(itemtype)
+                # スキーマタイプを抽出（URLから最後の部分を取得）
+                if '/' in itemtype:
+                    schema_type = itemtype.split('/')[-1]
+                    schema_types.append(schema_type)
         
         # RDFa
         rdfa_types = []
@@ -567,6 +729,28 @@ class SEOAnalyzer:
             typeof = elem.get('typeof', '')
             if typeof:
                 rdfa_types.append(typeof)
+                # スキーマタイプを抽出
+                if ':' in typeof:
+                    schema_type = typeof.split(':')[-1]
+                    schema_types.append(schema_type)
+        
+        # JavaScriptで動的に生成される可能性を検出
+        # scriptタグ内で構造化データ関連のキーワードを検索
+        js_scripts = soup.find_all('script')
+        potential_js_structured_data = False
+        js_keywords = ['schema.org', 'structured data', 'json-ld', 'application/ld+json', '@type', '@context']
+        
+        for script in js_scripts:
+            script_content = script.string or ''
+            script_src = script.get('src', '')
+            # scriptタグの内容またはsrc属性に構造化データ関連のキーワードが含まれているか
+            if any(keyword.lower() in script_content.lower() or keyword.lower() in script_src.lower() 
+                   for keyword in js_keywords):
+                potential_js_structured_data = True
+                break
+        
+        # 構造化データの品質評価
+        quality_score = self._evaluate_structured_data_quality(structured_data, schema_details)
         
         return {
             'json_ld_count': len(json_ld_scripts),
@@ -575,7 +759,135 @@ class SEOAnalyzer:
             'microdata_types': list(set(microdata_types)),
             'rdfa_count': len(rdfa_types),
             'rdfa_types': list(set(rdfa_types)),
-            'has_structured_data': len(structured_data) > 0 or len(microdata_items) > 0 or len(rdfa_types) > 0
+            'has_structured_data': len(structured_data) > 0 or len(microdata_items) > 0 or len(rdfa_types) > 0,
+            'schema_types': list(set(schema_types)),
+            'schema_details': schema_details,
+            'potential_js_structured_data': potential_js_structured_data,
+            'quality_score': quality_score,
+            'total_schemas': len(set(schema_types))
+        }
+    
+    def _extract_schema_info(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        構造化データからスキーマ情報を抽出
+        
+        Args:
+            data: JSON-LDデータ
+            
+        Returns:
+            dict: スキーマ情報
+        """
+        if not isinstance(data, dict):
+            return None
+        
+        schema_type = data.get('@type', '')
+        if not schema_type:
+            return None
+        
+        # スキーマタイプを正規化（URLから最後の部分を取得）
+        if '/' in schema_type:
+            schema_type = schema_type.split('/')[-1]
+        
+        # 主要プロパティを抽出
+        properties = {}
+        important_props = ['name', 'description', 'url', 'image', 'price', 'availability', 
+                          'rating', 'reviewCount', 'headline', 'author', 'datePublished',
+                          'breadcrumb', 'itemListElement']
+        
+        for prop in important_props:
+            if prop in data:
+                properties[prop] = data[prop]
+        
+        return {
+            'schema_type': schema_type,
+            'properties': properties,
+            'full_data': data  # 完全なデータも保持（サイズ制限あり）
+        }
+    
+    def _evaluate_structured_data_quality(self, structured_data: List[Dict], schema_details: List[Dict]) -> Dict[str, Any]:
+        """
+        構造化データの品質を評価
+        
+        Args:
+            structured_data: 構造化データのリスト
+            schema_details: スキーマ詳細のリスト
+            
+        Returns:
+            dict: 品質評価結果
+        """
+        if not structured_data:
+            return {
+                'score': 0,
+                'issues': ['構造化データが検出されませんでした'],
+                'recommendations': ['JSON-LD形式で構造化データを追加することを推奨します']
+            }
+        
+        score = 0
+        max_score = 100
+        issues = []
+        recommendations = []
+        
+        # スキーマタイプの多様性（20点）
+        unique_types = len(set(sd.get('schema_type', '') for sd in schema_details if sd))
+        if unique_types >= 3:
+            score += 20
+        elif unique_types == 2:
+            score += 15
+        elif unique_types == 1:
+            score += 10
+        else:
+            issues.append('スキーマタイプが特定できませんでした')
+        
+        # 必須プロパティのチェック（40点）
+        required_props_by_type = {
+            'Product': ['name', 'description'],
+            'Article': ['headline', 'author'],
+            'Organization': ['name', 'url'],
+            'BreadcrumbList': ['itemListElement']
+        }
+        
+        for detail in schema_details:
+            schema_type = detail.get('schema_type', '')
+            properties = detail.get('properties', {})
+            
+            if schema_type in required_props_by_type:
+                required = required_props_by_type[schema_type]
+                missing = [prop for prop in required if prop not in properties]
+                if not missing:
+                    score += 10
+                else:
+                    issues.append(f'{schema_type}スキーマに必須プロパティが不足: {", ".join(missing)}')
+                    recommendations.append(f'{schema_type}スキーマに{", ".join(missing)}プロパティを追加してください')
+        
+        # 推奨プロパティのチェック（20点）
+        recommended_props_by_type = {
+            'Product': ['image', 'price', 'availability', 'rating'],
+            'Article': ['image', 'datePublished', 'publisher'],
+            'Organization': ['logo', 'sameAs']
+        }
+        
+        for detail in schema_details:
+            schema_type = detail.get('schema_type', '')
+            properties = detail.get('properties', {})
+            
+            if schema_type in recommended_props_by_type:
+                recommended = recommended_props_by_type[schema_type]
+                present = [prop for prop in recommended if prop in properties]
+                if len(present) >= len(recommended) * 0.5:  # 50%以上
+                    score += 5
+        
+        # データの完全性（20点）
+        for sd in structured_data:
+            data = sd.get('data', {})
+            if isinstance(data, dict) and len(data) >= 5:
+                score += 5
+        
+        return {
+            'score': min(max_score, score),
+            'max_score': max_score,
+            'issues': issues,
+            'recommendations': recommendations,
+            'schema_count': len(structured_data)
         }
     
     def _analyze_links(self, soup: BeautifulSoup, base_url: str) -> Dict[str, Any]:
