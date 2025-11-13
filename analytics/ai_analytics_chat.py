@@ -1442,8 +1442,53 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             str: 完全な応答（エラー時は部分応答）
         """
         try:
+            # データ取得の進捗をyield（待機時間中のストレス軽減のため）
+            yield "[STEP] データ取得を開始しています...\n\n"
+            
+            # URLを抽出して、どのステップが必要か判定
+            import re
+            url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+            urls = re.findall(url_pattern, question)
+            question_lower = question.lower()
+            
+            # SEO分析が必要か判定
+            needs_seo_analysis = any(keyword in question_lower for keyword in [
+                'seo', 'タイトル', 'ディスクリプション', '見出し', 'メタ', 'alt', 
+                '構造化データ', 'スクレイピング', 'html', 'css', 'ページ分析', 
+                'コンテンツ分析', '改善提案', '最適化'
+            ]) or len(urls) > 0
+            
+            # GA4/GSCデータが必要か判定
+            needs_ga4 = any(keyword in question_lower for keyword in [
+                'トラフィック', 'セッション', 'ユーザー', 'ページビュー', 'バウンス', 
+                '滞在時間', 'コンバージョン', '売上', '収益', 'アクセス', '集客',
+                'オーガニック', '流入', '訪問', '来訪', '月間', '数値', 'レポート',
+                'report', 'データ', '統計', '分析', 'パフォーマンス', '実績',
+                'ページ分析', 'ページの分析', '分析して', '分析してください'
+            ]) or len(urls) > 0
+            
+            needs_gsc = any(keyword in question_lower for keyword in [
+                '検索', 'seo', 'クリック', 'インプレッション', 'ctr', 'ポジション', 
+                '順位', 'キーワード', 'クエリ', '検索流入', 'オーガニック', '集客',
+                '月間', '数値', 'レポート', 'report', 'データ', '統計', '分析'
+            ]) or len(urls) > 0
+            
+            # 各ステップの進捗をyield
+            if needs_seo_analysis and urls:
+                yield "[STEP] 🔍 SEO分析を実行中...\n"
+            
+            if needs_gsc:
+                yield "[STEP] 📊 GSCデータを取得中...\n"
+            
+            if needs_ga4:
+                yield "[STEP] 📈 GA4データを取得中...\n"
+            
             # データコンテキストを構築（ask()と同じロジック）
             data_context = self._build_data_context(question, site_name=site_name)
+            
+            # データ取得完了を通知
+            yield "[STEP] ✅ データ取得完了\n\n"
+            yield "[STEP] 🤖 AI分析を開始しています...\n\n"
             
             # 質問の種類を判定
             is_yearly_comparison = any(keyword in question for keyword in [

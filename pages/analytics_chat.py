@@ -384,23 +384,39 @@ if prompt := st.chat_input(chat_placeholder):
             if urls_in_question:
                 # SEO分析実行中のステップ表示（シンプル版）
                 status_placeholder = st.empty()
-                with status_placeholder.container():
-                    st.info("🔍 SEO分析を実行中...")
                 
                 try:
                     # ストリーミング応答を取得
-                    status_placeholder.empty()  # データ取得完了後、ストリーミング開始前にステータスをクリア
+                    # ステップメッセージとAI応答を分けて処理
+                    step_messages = []
+                    ai_response_parts = []
+                    in_ai_response = False
                     
-                    # ストリーミング応答を表示
+                    # ストリーミング応答を処理
                     try:
-                        # st.write_stream()を使用してリアルタイム表示
-                        full_answer = st.write_stream(
-                            st.session_state.ai_chat.ask_stream(
-                                question,
-                                model=st.session_state.model,
-                                site_name=st.session_state.selected_site
-                            )
-                        )
+                        for chunk in st.session_state.ai_chat.ask_stream(
+                            question,
+                            model=st.session_state.model,
+                            site_name=st.session_state.selected_site
+                        ):
+                            # ステップメッセージかAI応答かを判定
+                            if chunk.startswith("[STEP]"):
+                                step_messages.append(chunk)
+                                # ステップメッセージをリアルタイム表示
+                                with status_placeholder.container():
+                                    st.info("".join(step_messages))
+                            else:
+                                # AI応答の開始
+                                if not in_ai_response:
+                                    in_ai_response = True
+                                    status_placeholder.empty()  # ステップメッセージをクリア
+                                
+                                ai_response_parts.append(chunk)
+                                # AI応答をリアルタイム表示
+                                st.write("".join(ai_response_parts))
+                        
+                        # 完全な応答を取得
+                        full_answer = "".join(ai_response_parts)
                     except AttributeError:
                         # Streamlit 1.28.0未満の場合の代替実装
                         answer_placeholder = st.empty()
@@ -410,8 +426,16 @@ if prompt := st.chat_input(chat_placeholder):
                             model=st.session_state.model,
                             site_name=st.session_state.selected_site
                         ):
-                            full_answer += chunk
-                            answer_placeholder.markdown(full_answer)
+                            if chunk.startswith("[STEP]"):
+                                step_messages.append(chunk)
+                                with status_placeholder.container():
+                                    st.info("".join(step_messages))
+                            else:
+                                if not in_ai_response:
+                                    in_ai_response = True
+                                    status_placeholder.empty()
+                                full_answer += chunk
+                                answer_placeholder.markdown(full_answer)
                     
                     # メッセージ履歴に追加
                     answer_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -464,23 +488,39 @@ if prompt := st.chat_input(chat_placeholder):
             else:
                 # 通常の分析（シンプル版）
                 status_placeholder = st.empty()
-                with status_placeholder.container():
-                    st.info("📊 データ分析を実行中...")
                 
                 try:
                     # ストリーミング応答を取得
-                    status_placeholder.empty()  # データ取得完了後、ストリーミング開始前にステータスをクリア
+                    # ステップメッセージとAI応答を分けて処理
+                    step_messages = []
+                    ai_response_parts = []
+                    in_ai_response = False
                     
-                    # ストリーミング応答を表示
+                    # ストリーミング応答を処理
                     try:
-                        # st.write_stream()を使用してリアルタイム表示
-                        full_answer = st.write_stream(
-                            st.session_state.ai_chat.ask_stream(
-                                question,
-                                model=st.session_state.model,
-                                site_name=st.session_state.selected_site
-                            )
-                        )
+                        for chunk in st.session_state.ai_chat.ask_stream(
+                            question,
+                            model=st.session_state.model,
+                            site_name=st.session_state.selected_site
+                        ):
+                            # ステップメッセージかAI応答かを判定
+                            if chunk.startswith("[STEP]"):
+                                step_messages.append(chunk)
+                                # ステップメッセージをリアルタイム表示
+                                with status_placeholder.container():
+                                    st.info("".join(step_messages))
+                            else:
+                                # AI応答の開始
+                                if not in_ai_response:
+                                    in_ai_response = True
+                                    status_placeholder.empty()  # ステップメッセージをクリア
+                                
+                                ai_response_parts.append(chunk)
+                                # AI応答をリアルタイム表示
+                                st.write("".join(ai_response_parts))
+                        
+                        # 完全な応答を取得
+                        full_answer = "".join(ai_response_parts)
                     except AttributeError:
                         # Streamlit 1.28.0未満の場合の代替実装
                         answer_placeholder = st.empty()
@@ -490,8 +530,16 @@ if prompt := st.chat_input(chat_placeholder):
                             model=st.session_state.model,
                             site_name=st.session_state.selected_site
                         ):
-                            full_answer += chunk
-                            answer_placeholder.markdown(full_answer)
+                            if chunk.startswith("[STEP]"):
+                                step_messages.append(chunk)
+                                with status_placeholder.container():
+                                    st.info("".join(step_messages))
+                            else:
+                                if not in_ai_response:
+                                    in_ai_response = True
+                                    status_placeholder.empty()
+                                full_answer += chunk
+                                answer_placeholder.markdown(full_answer)
                     
                     # メッセージ履歴に追加
                     answer_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
