@@ -565,24 +565,31 @@ class GoogleAPIsIntegration:
             }
             
             # API呼び出し
-            response = self.ga4_service.properties().batchRunReports(
-                property=f'properties/{self.ga4_property_id}',
-                body=request
-            ).execute()
+            logger.info(f"GA4 API呼び出し開始: プロパティID={self.ga4_property_id}, 期間={start_date}～{end_date}, ディメンション={dimensions}")
+            try:
+                response = self.ga4_service.properties().batchRunReports(
+                    property=f'properties/{self.ga4_property_id}',
+                    body=request
+                ).execute()
+                logger.info(f"GA4 API呼び出し完了: レスポンス受信")
+            except Exception as api_error:
+                logger.error(f"GA4 API呼び出しエラー: {api_error}", exc_info=True)
+                raise
             
             # データの変換
+            logger.info(f"GA4データ変換開始: レスポンス処理中...")
             data = []
             if 'reports' in response:
                 for report in response['reports']:
                     if 'rows' in report:
                         for row in report['rows']:
                             row_data = {}
-                            
+
                             # ディメンション値の取得
                             for i, dimension in enumerate(dimensions):
                                 if i < len(row.get('dimensionValues', [])):
                                     row_data[dimension] = row['dimensionValues'][i].get('value', '')
-                            
+
                             # メトリクス値の取得
                             for i, metric in enumerate(metrics):
                                 if i < len(row.get('metricValues', [])):
@@ -592,7 +599,7 @@ class GoogleAPIsIntegration:
                                         row_data[metric] = float(value)
                                     except ValueError:
                                         row_data[metric] = value
-                            
+
                             data.append(row_data)
             
             df = pd.DataFrame(data)
