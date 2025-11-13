@@ -86,25 +86,87 @@ Render.comで環境変数を設定する方法を説明します。
 
 #### 環境変数7: USE_PLAYWRIGHT（オプション、高度な機能）
 
-- **Key**: `USE_PLAYWRIGHT`
-- **Value**: `true` または `false`（デフォルト: `false`）
-- **注意**: JavaScriptで動的に生成される構造化データを検出する場合に使用
-- **要件**: `requirements.txt`で`playwright>=1.40.0`のコメントを外し、デプロイ後に`playwright install chromium`を実行する必要があります
-- **推奨**: PlaywrightはSeleniumより軽量で高速です
+**この機能について**
+
+構造化データ（JSON-LDなど）は、HTMLに直接書かれている場合と、JavaScriptで動的に生成される場合があります。通常の解析では、HTMLに直接書かれている構造化データしか検出できません。JavaScriptで動的に生成される構造化データを検出するには、ブラウザでJavaScriptを実行する必要があります。
+
+**設定方法**
+
+1. **Key**: `USE_PLAYWRIGHT`
+2. **Value**: `true` または `false`（デフォルト: `false`）
+3. **使用する場合**: JavaScriptで動的に生成される構造化データを検出したい場合のみ `true` に設定
+4. **使用しない場合**: 通常のHTML解析のみで十分な場合は設定不要（デフォルトの `false` のまま）
+
+**設定手順（Playwrightを使用する場合）**
+
+1. `requirements.txt`を開く
+2. 以下の行のコメント（`#`）を外す：
+   ```
+   playwright>=1.40.0
+   ```
+3. Render.comの環境変数に `USE_PLAYWRIGHT=true` を追加
+4. デプロイ後、Render.comのシェルで以下を実行：
+   ```
+   playwright install chromium
+   ```
+
+**注意事項**
+
+- Playwrightを使用すると、ページ取得に時間がかかります（通常の2-3倍）
+- Render.comの無料プランでは、メモリやCPUの制限があるため、エラーが発生する可能性があります
+- ほとんどの場合、通常のHTML解析で十分です。JavaScriptで動的に生成される構造化データがある場合のみ使用してください
+
+---
 
 #### 環境変数8: USE_SELENIUM（オプション、高度な機能）
 
-- **Key**: `USE_SELENIUM`
-- **Value**: `true` または `false`（デフォルト: `false`）
-- **注意**: JavaScriptで動的に生成される構造化データを検出する場合に使用（Playwrightの代替）
-- **要件**: `requirements.txt`で`selenium>=4.15.0`のコメントを外し、ChromeDriverの設定が必要です
-- **注意**: Render.comの無料プランでは制限がある可能性があります
+**この機能について**
+
+USE_SELENIUMは、USE_PLAYWRIGHTの代替手段です。Playwrightが使用できない環境や、Seleniumを既に使用している場合に使用します。
+
+**設定方法**
+
+1. **Key**: `USE_SELENIUM`
+2. **Value**: `true` または `false`（デフォルト: `false`）
+3. **使用する場合**: Playwrightが使用できない場合、またはSeleniumを優先したい場合のみ `true` に設定
+4. **推奨**: 通常はPlaywright（USE_PLAYWRIGHT）の使用を推奨します（より軽量で高速）
+
+**設定手順（Seleniumを使用する場合）**
+
+1. `requirements.txt`を開く
+2. 以下の行のコメント（`#`）を外す：
+   ```
+   selenium>=4.15.0
+   ```
+3. Render.comの環境変数に `USE_SELENIUM=true` を追加
+4. ChromeDriverの設定（環境変数9を参照）
+
+**注意事項**
+
+- USE_PLAYWRIGHTとUSE_SELENIUMは同時に設定しないでください（USE_PLAYWRIGHTが優先されます）
+- Render.comの無料プランでは、ChromeDriverの設定が複雑で、エラーが発生する可能性が高いです
+- 可能であれば、USE_PLAYWRIGHTの使用を推奨します
+
+---
 
 #### 環境変数9: CHROMEDRIVER_PATH（オプション、Selenium使用時のみ）
 
-- **Key**: `CHROMEDRIVER_PATH`
-- **Value**: ChromeDriverのパス（例: `/usr/local/bin/chromedriver`）
-- **注意**: Seleniumを使用する場合のみ必要。自動検出も試行されます
+**この機能について**
+
+Seleniumを使用する場合、Chromeブラウザを制御するためにChromeDriverが必要です。通常は自動検出されますが、見つからない場合は手動でパスを指定します。
+
+**設定方法**
+
+1. **Key**: `CHROMEDRIVER_PATH`
+2. **Value**: ChromeDriverのパス（例: `/usr/local/bin/chromedriver`）
+3. **使用する場合**: USE_SELENIUM=true に設定し、かつChromeDriverが自動検出されない場合のみ設定
+4. **通常は不要**: 自動検出を試行するため、多くの場合設定不要です
+
+**注意事項**
+
+- USE_SELENIUMを使用しない場合は設定不要です
+- Render.comの無料プランでは、ChromeDriverのインストールと設定が複雑です
+- 可能であれば、USE_PLAYWRIGHTの使用を推奨します（ChromeDriverの設定が不要）
 
 ### ステップ3: Google認証情報ファイルの設定
 
