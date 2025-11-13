@@ -105,7 +105,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
 - 見出しテキストが提供されている場合は、必ず具体的な見出しテキストを回答に含めてください
 - GSC/GA4データが提供されている場合は、SEO分析だけでなく、実際のトラフィックデータも分析してください"""
     
-    def _extract_date_range(self, question: str) -> int:
+    def _extract_date_range(self, question: str) -> tuple:
         """
         質問から日付範囲を抽出
         
@@ -113,51 +113,123 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             question (str): ユーザーの質問
             
         Returns:
-            int: 日数
+            tuple: (start_date, end_date, date_range_days) または (None, None, date_range_days)
+                   start_date, end_dateは 'YYYY-MM-DD' 形式、特定の月が指定されている場合は設定される
         """
+        import re
+        from datetime import datetime, timedelta
         question_lower = question.lower()
         
+        # 特定の年月を抽出（例: "2025年10月"）
+        year_month_match = re.search(r'(\d{4})年\s*(\d{1,2})月', question)
+        if year_month_match:
+            year = int(year_month_match.group(1))
+            month = int(year_month_match.group(2))
+            
+            # その月の最初の日と最後の日を計算
+            if month == 12:
+                next_month = datetime(year + 1, 1, 1)
+            else:
+                next_month = datetime(year, month + 1, 1)
+            
+            start_date = datetime(year, month, 1)
+            end_date = next_month - timedelta(days=1)
+            
+            date_range_days = (end_date - start_date).days + 1
+            
+            logger.info(f"特定の月を検出: {year}年{month}月 ({start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')})")
+            return (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), date_range_days)
+        
+        # 特定の月を抽出（例: "10月" - 今年を仮定）
+        month_match = re.search(r'(\d{1,2})月', question_lower)
+        if month_match and '年' not in question_lower:
+            month = int(month_match.group(1))
+            current_year = datetime.now().year
+            
+            if month == 12:
+                next_month = datetime(current_year + 1, 1, 1)
+            else:
+                next_month = datetime(current_year, month + 1, 1)
+            
+            start_date = datetime(current_year, month, 1)
+            end_date = next_month - timedelta(days=1)
+            
+            date_range_days = (end_date - start_date).days + 1
+            
+            logger.info(f"特定の月を検出（今年）: {current_year}年{month}月 ({start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')})")
+            return (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), date_range_days)
+        
+        # 相対的な日付範囲
         if '今日' in question_lower or '本日' in question_lower:
-            return 1
+            return (None, None, 1)
         elif '昨日' in question_lower:
-            return 1
+            yesterday = datetime.now() - timedelta(days=1)
+            return (yesterday.strftime('%Y-%m-%d'), yesterday.strftime('%Y-%m-%d'), 1)
         elif '今週' in question_lower or 'この週' in question_lower:
-            return 7
+            return (None, None, 7)
         elif '先週' in question_lower or '前週' in question_lower:
-            return 7
-        elif '今月' in question_lower or '今月' in question_lower:
-            return 30
+            return (None, None, 7)
+        elif '今月' in question_lower:
+            # 今月の最初の日から今日まで
+            today = datetime.now()
+            start_of_month = datetime(today.year, today.month, 1)
+            days = (today - start_of_month).days + 1
+            return (start_of_month.strftime('%Y-%m-%d'), today.strftime('%Y-%m-%d'), days)
         elif '先月' in question_lower or '前月' in question_lower:
-            return 30
+            # 先月の最初の日から最後の日まで
+            today = datetime.now()
+            if today.month == 1:
+                last_month = datetime(today.year - 1, 12, 1)
+            else:
+                last_month = datetime(today.year, today.month - 1, 1)
+            
+            if last_month.month == 12:
+                next_month = datetime(last_month.year + 1, 1, 1)
+            else:
+                next_month = datetime(last_month.year, last_month.month + 1, 1)
+            
+            end_of_last_month = next_month - timedelta(days=1)
+            days = (end_of_last_month - last_month).days + 1
+            
+            return (last_month.strftime('%Y-%m-%d'), end_of_last_month.strftime('%Y-%m-%d'), days)
         elif '過去' in question_lower:
             # "過去7日"のような表現を探す
-            import re
             match = re.search(r'過去(\d+)日', question_lower)
             if match:
-                return int(match.group(1))
+                return (None, None, int(match.group(1)))
         elif '最近' in question_lower:
-            return 7
+            return (None, None, 7)
         
         # デフォルトは30日
-        return 30
+        return (None, None, 30)
     
-    def _get_ga4_summary(self, date_range_days: int) -> Dict[str, Any]:
+    def _get_ga4_summary(self, date_range_days: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """
         GA4データのサマリーを取得
         
         Args:
             date_range_days (int): 日数
+            start_date (str): 開始日 (YYYY-MM-DD形式、オプション)
+            end_date (str): 終了日 (YYYY-MM-DD形式、オプション)
             
         Returns:
             dict: サマリーデータ
         """
         try:
             # 基本的なメトリクスを取得
-            ga4_data = self.google_apis.get_ga4_data(
-                date_range_days=date_range_days,
-                metrics=['sessions', 'users', 'pageviews', 'bounceRate', 'averageSessionDuration'],
-                dimensions=['date']
-            )
+            if start_date and end_date:
+                ga4_data = self.google_apis.get_ga4_data_custom_range(
+                    start_date=start_date,
+                    end_date=end_date,
+                    metrics=['sessions', 'users', 'pageviews', 'bounceRate', 'averageSessionDuration'],
+                    dimensions=['date']
+                )
+            else:
+                ga4_data = self.google_apis.get_ga4_data(
+                    date_range_days=date_range_days,
+                    metrics=['sessions', 'users', 'pageviews', 'bounceRate', 'averageSessionDuration'],
+                    dimensions=['date']
+                )
             
             if ga4_data.empty:
                 return {"error": "データが取得できませんでした"}
@@ -178,28 +250,65 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             logger.error(f"GA4データ取得エラー: {e}")
             return {"error": f"データ取得エラー: {str(e)}"}
     
-    def _get_gsc_summary(self, date_range_days: int) -> Dict[str, Any]:
+    def _get_gsc_summary(self, date_range_days: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """
         GSCデータのサマリーを取得
         
         Args:
             date_range_days (int): 日数
+            start_date (str): 開始日 (YYYY-MM-DD形式、オプション)
+            end_date (str): 終了日 (YYYY-MM-DD形式、オプション)
             
         Returns:
             dict: サマリーデータ
         """
         try:
+            # GSCデータを取得
+            if start_date and end_date:
+                gsc_data = self.google_apis._get_gsc_data_custom_range(
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            else:
+                gsc_data = self.google_apis.get_gsc_data(
+                    date_range_days=date_range_days,
+                    dimensions=['date', 'page', 'query']
+                )
+            
+            if gsc_data.empty:
+                return {"error": "データが取得できませんでした"}
+            
             # ページ別データを取得
-            gsc_pages = self.google_apis.get_top_pages_gsc(
-                date_range_days=date_range_days,
-                limit=50
-            )
+            if start_date and end_date:
+                # カスタム範囲の場合は、get_top_pages_gscを使えないので、gsc_dataから集計
+                gsc_pages = gsc_data.groupby('page').agg({
+                    'clicks': 'sum',
+                    'impressions': 'sum',
+                    'ctr': 'mean',
+                    'position': 'mean'
+                }).reset_index()
+                gsc_pages = gsc_pages.sort_values('clicks', ascending=False).head(50)
+            else:
+                gsc_pages = self.google_apis.get_top_pages_gsc(
+                    date_range_days=date_range_days,
+                    limit=50
+                )
             
             # クエリ別データを取得
-            gsc_queries = self.google_apis.get_top_queries_gsc(
-                date_range_days=date_range_days,
-                limit=50
-            )
+            if start_date and end_date:
+                # カスタム範囲の場合は、gsc_dataから集計
+                gsc_queries = gsc_data.groupby('query').agg({
+                    'clicks': 'sum',
+                    'impressions': 'sum',
+                    'ctr': 'mean',
+                    'position': 'mean'
+                }).reset_index()
+                gsc_queries = gsc_queries.sort_values('clicks', ascending=False).head(50)
+            else:
+                gsc_queries = self.google_apis.get_top_queries_gsc(
+                    date_range_days=date_range_days,
+                    limit=50
+                )
             
             summary = {
                 "total_clicks": int(gsc_pages['clicks'].sum()) if not gsc_pages.empty else 0,
@@ -288,8 +397,18 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         logger.info("データコンテキスト構築開始")
         logger.info(f"質問: {question[:100]}...")
         
-        date_range = self._extract_date_range(question)
-        logger.info(f"抽出された日付範囲: {date_range}日")
+        date_range_result = self._extract_date_range(question)
+        if isinstance(date_range_result, tuple) and len(date_range_result) == 3:
+            start_date, end_date, date_range_days = date_range_result
+            date_range = date_range_days
+            logger.info(f"抽出された日付範囲: {date_range}日")
+            if start_date and end_date:
+                logger.info(f"  開始日: {start_date}, 終了日: {end_date}")
+        else:
+            # 後方互換性のため
+            date_range = date_range_result if isinstance(date_range_result, int) else 30
+            start_date, end_date = None, None
+            logger.info(f"抽出された日付範囲: {date_range}日")
         
         context_parts = []
         
@@ -318,13 +437,15 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         needs_ga4 = any(keyword in question_lower for keyword in [
             'トラフィック', 'セッション', 'ユーザー', 'ページビュー', 'バウンス', 
             '滞在時間', 'コンバージョン', '売上', '収益', 'アクセス', '集客',
-            'オーガニック', '流入', '訪問', '来訪'
+            'オーガニック', '流入', '訪問', '来訪', '月間', '数値', 'レポート',
+            'report', 'データ', '統計', '分析', 'パフォーマンス', '実績'
         ]) or needs_yearly_comparison or needs_page_specific_analysis
         
         # GSCデータが必要かどうかを判定
         needs_gsc = any(keyword in question_lower for keyword in [
             '検索', 'seo', 'クリック', 'インプレッション', 'ctr', 'ポジション', 
-            '順位', 'キーワード', 'クエリ', '検索流入', 'オーガニック', '集客'
+            '順位', 'キーワード', 'クエリ', '検索流入', 'オーガニック', '集客',
+            '月間', '数値', 'レポート', 'report', 'データ', '統計', '分析'
         ]) or needs_yearly_comparison or needs_page_specific_analysis
         
         # SEO分析を実行（URLが含まれている場合、またはSEO関連の質問の場合）
@@ -676,10 +797,13 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 context_parts.append("")
         
         if needs_ga4:
-            ga4_summary = self._get_ga4_summary(date_range)
+            ga4_summary = self._get_ga4_summary(date_range, start_date, end_date)
             if "error" not in ga4_summary:
                 context_parts.append("=== Google Analytics 4 (GA4) データ ===")
-                context_parts.append(f"期間: 過去{date_range}日間")
+                if start_date and end_date:
+                    context_parts.append(f"期間: {start_date} ～ {end_date}")
+                else:
+                    context_parts.append(f"期間: 過去{date_range}日間")
                 context_parts.append(f"総セッション数: {ga4_summary['total_sessions']:,}")
                 context_parts.append(f"総ユーザー数: {ga4_summary['total_users']:,}")
                 context_parts.append(f"総ページビュー数: {ga4_summary['total_pageviews']:,}")
@@ -688,10 +812,13 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 context_parts.append("")
         
         if needs_gsc:
-            gsc_summary = self._get_gsc_summary(date_range)
+            gsc_summary = self._get_gsc_summary(date_range, start_date, end_date)
             if "error" not in gsc_summary:
                 context_parts.append("=== Google Search Console (GSC) データ ===")
-                context_parts.append(f"期間: 過去{date_range}日間")
+                if start_date and end_date:
+                    context_parts.append(f"期間: {start_date} ～ {end_date}")
+                else:
+                    context_parts.append(f"期間: 過去{date_range}日間")
                 context_parts.append(f"総クリック数: {gsc_summary['total_clicks']:,}")
                 context_parts.append(f"総インプレッション数: {gsc_summary['total_impressions']:,}")
                 context_parts.append(f"平均CTR: {gsc_summary['avg_ctr']:.2f}%")

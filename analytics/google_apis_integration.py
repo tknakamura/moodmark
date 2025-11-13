@@ -187,6 +187,95 @@ class GoogleAPIsIntegration:
             logger.error(f"GA4データ取得エラー: {e}")
             return pd.DataFrame()
     
+    def get_ga4_data_custom_range(self, start_date: str, end_date: str, metrics=None, dimensions=None):
+        """
+        カスタム日付範囲でGA4データを取得
+        
+        Args:
+            start_date (str): 開始日 (YYYY-MM-DD)
+            end_date (str): 終了日 (YYYY-MM-DD)
+            metrics (list): 取得するメトリクス
+            dimensions (list): 取得するディメンション
+        
+        Returns:
+            pd.DataFrame: GA4データ
+        """
+        if not self.ga4_service or not self.ga4_property_id:
+            logger.error("GA4サービスまたはプロパティIDが設定されていません")
+            return pd.DataFrame()
+        
+        # デフォルトメトリクス
+        if not metrics:
+            metrics = [
+                'sessions',
+                'users', 
+                'pageviews',
+                'bounceRate',
+                'averageSessionDuration',
+                'conversions',
+                'totalRevenue'
+            ]
+        
+        # デフォルトディメンション
+        if not dimensions:
+            dimensions = [
+                'date',
+                'pagePath',
+                'sourceMedium',
+                'deviceCategory',
+                'country'
+            ]
+        
+        try:
+            # GA4リクエスト作成
+            request = {
+                'requests': [{
+                    'property': f'properties/{self.ga4_property_id}',
+                    'dateRanges': [{'startDate': start_date, 'endDate': end_date}],
+                    'metrics': [{'name': metric} for metric in metrics],
+                    'dimensions': [{'name': dimension} for dimension in dimensions],
+                    'limit': 100000
+                }]
+            }
+            
+            # API呼び出し
+            response = self.ga4_service.properties().batchRunReports(
+                property=f'properties/{self.ga4_property_id}',
+                body=request
+            ).execute()
+            
+            # データの変換
+            data = []
+            if 'reports' in response and len(response['reports']) > 0:
+                report = response['reports'][0]
+                if 'rows' in report:
+                    for row in report['rows']:
+                        row_data = {}
+                        # ディメンション値
+                        for i, dimension in enumerate(dimensions):
+                            if i < len(row.get('dimensionValues', [])):
+                                row_data[dimension] = row['dimensionValues'][i].get('value', '')
+                        # メトリクス値
+                        for i, metric in enumerate(metrics):
+                            if i < len(row.get('metricValues', [])):
+                                value = row['metricValues'][i].get('value', '0')
+                                try:
+                                    row_data[metric] = float(value)
+                                except ValueError:
+                                    row_data[metric] = 0
+                        data.append(row_data)
+            
+            df = pd.DataFrame(data)
+            logger.info(f"GA4データ取得完了（カスタム範囲）: {len(df)}行 ({start_date} ～ {end_date})")
+            return df
+            
+        except HttpError as e:
+            logger.error(f"GA4 API エラー: {e}")
+            return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"GA4データ取得エラー: {e}")
+            return pd.DataFrame()
+    
     def get_gsc_data(self, date_range_days=30, dimensions=None, row_limit=25000):
         """
         Google Search Consoleからデータを取得
