@@ -70,6 +70,7 @@ oauth_credentials.json
 config/oauth_credentials.json
 config/token.json
 config/google-credentials-*.json
+RENDER_CREDENTIALS_JSON.txt
 
 # Temporary files
 tmp/
