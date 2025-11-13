@@ -31,13 +31,14 @@ logger = logging.getLogger(__name__)
 class AIAnalyticsChat:
     """GA4/GSCデータを分析するAIチャットクラス"""
     
-    def __init__(self, credentials_file=None, openai_api_key=None):
+    def __init__(self, credentials_file=None, openai_api_key=None, default_site_name='moodmark'):
         """
         初期化
         
         Args:
             credentials_file (str): Google認証情報ファイルのパス
             openai_api_key (str): OpenAI APIキー
+            default_site_name (str): デフォルトのサイト名 ('moodmark' または 'moodmarkgift')
         """
         # OpenAI APIキーの取得
         self.openai_api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
@@ -55,6 +56,9 @@ class AIAnalyticsChat:
         
         # SEO分析の初期化
         self.seo_analyzer = SEOAnalyzer()
+        
+        # デフォルトサイト名
+        self.default_site_name = default_site_name
         
         # システムプロンプト
         self.system_prompt = """あなたはGoogle Analytics 4 (GA4)、Google Search Console (GSC)、およびSEO分析の専門家です。
@@ -257,7 +261,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             logger.error(f"GA4データ取得エラー: {e}")
             return {"error": f"データ取得エラー: {str(e)}"}
     
-    def _get_gsc_summary(self, date_range_days: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+    def _get_gsc_summary(self, date_range_days: int, start_date: str = None, end_date: str = None, site_name: str = 'moodmark') -> Dict[str, Any]:
         """
         GSCデータのサマリーを取得
         
@@ -265,23 +269,26 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             date_range_days (int): 日数
             start_date (str): 開始日 (YYYY-MM-DD形式、オプション)
             end_date (str): 終了日 (YYYY-MM-DD形式、オプション)
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
             
         Returns:
             dict: サマリーデータ
         """
         try:
-            logger.info(f"GSCデータ取得開始: 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
+            logger.info(f"GSCデータ取得開始: サイト={site_name}, 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
             
             # GSCデータを取得
             if start_date and end_date:
                 gsc_data = self.google_apis._get_gsc_data_custom_range(
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    site_name=site_name
                 )
             else:
                 gsc_data = self.google_apis.get_gsc_data(
                     date_range_days=date_range_days,
-                    dimensions=['date', 'page', 'query']
+                    dimensions=['date', 'page', 'query'],
+                    site_name=site_name
                 )
             
             logger.info(f"GSCデータ取得完了: {len(gsc_data)}行")
@@ -303,7 +310,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             else:
                 gsc_pages = self.google_apis.get_top_pages_gsc(
                     date_range_days=date_range_days,
-                    limit=50
+                    limit=50,
+                    site_name=site_name
                 )
             
             # クエリ別データを取得
@@ -319,7 +327,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             else:
                 gsc_queries = self.google_apis.get_top_queries_gsc(
                     date_range_days=date_range_days,
-                    limit=50
+                    limit=50,
+                    site_name=site_name
                 )
             
             summary = {
@@ -397,12 +406,30 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         
         return normalized_urls
     
-    def _build_data_context(self, question: str) -> str:
+    def _detect_site_from_url(self, url: str) -> str:
+        """
+        URLからサイト名を自動判定
+        
+        Args:
+            url (str): ページURL
+            
+        Returns:
+            str: サイト名 ('moodmark' または 'moodmarkgift')
+        """
+        if '/moodmarkgift/' in url:
+            return 'moodmarkgift'
+        elif '/moodmark/' in url:
+            return 'moodmark'
+        else:
+            return self.default_site_name
+    
+    def _build_data_context(self, question: str, site_name: str = None) -> str:
         """
         質問に基づいてデータコンテキストを構築
         
         Args:
             question (str): ユーザーの質問
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')、Noneの場合は自動判定またはデフォルトを使用
             
         Returns:
             str: データコンテキストの文字列
@@ -429,6 +456,19 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         # URLを抽出
         urls = self._extract_urls(question)
         logger.info(f"抽出されたURL: {urls}")
+        
+        # サイト名の決定（URLから自動判定、または指定された値、またはデフォルト）
+        if site_name is None:
+            if urls:
+                # URLから自動判定
+                site_name = self._detect_site_from_url(urls[0])
+                logger.info(f"URLからサイトを自動判定: {site_name}")
+            else:
+                # デフォルトを使用
+                site_name = self.default_site_name
+                logger.info(f"デフォルトサイトを使用: {site_name}")
+        else:
+            logger.info(f"指定されたサイトを使用: {site_name}")
         
         # SEO分析が必要かどうかを判定
         question_lower = question.lower()
@@ -838,7 +878,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             page_url_for_comparison = urls[0] if urls else None
             yearly_comparison = self.google_apis.get_yearly_comparison_gsc(
                 page_url=page_url_for_comparison,
-                date_range_days=date_range
+                date_range_days=date_range,
+                site_name=site_name
             )
             
             if 'error' in yearly_comparison:
@@ -894,7 +935,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             logger.info(f"特定ページのGSCデータを取得中: {urls[0]}")
             page_gsc_data = self.google_apis.get_page_specific_gsc_data(
                 page_url=urls[0],
-                date_range_days=date_range
+                date_range_days=date_range,
+                site_name=site_name
             )
             
             if 'error' not in page_gsc_data:
@@ -925,7 +967,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 context_parts.append("")
         
         if needs_gsc:
-            gsc_summary = self._get_gsc_summary(date_range, start_date, end_date)
+            gsc_summary = self._get_gsc_summary(date_range, start_date, end_date, site_name=site_name)
             if "error" not in gsc_summary:
                 context_parts.append("=== Google Search Console (GSC) データ ===")
                 if start_date and end_date:
@@ -952,7 +994,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             # デフォルトで両方のデータを取得
             logger.info("デフォルトデータ取得モード: GA4とGSCデータを取得")
             ga4_summary = self._get_ga4_summary(date_range)
-            gsc_summary = self._get_gsc_summary(date_range)
+            gsc_summary = self._get_gsc_summary(date_range, site_name=site_name)
             
             if "error" not in ga4_summary:
                 context_parts.append("=== Google Analytics 4 (GA4) データ ===")
@@ -990,13 +1032,14 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         
         return context_text
     
-    def ask(self, question: str, model: str = "gpt-4o-mini") -> str:
+    def ask(self, question: str, model: str = "gpt-4o-mini", site_name: str = None) -> str:
         """
         質問に対してAIが回答を生成
         
         Args:
             question (str): ユーザーの質問
             model (str): 使用するOpenAIモデル（デフォルト: gpt-4o-mini）
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')、Noneの場合は自動判定またはデフォルトを使用
             
         Returns:
             str: AIの回答
@@ -1009,7 +1052,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             
             # データコンテキストを構築
             logger.info("データコンテキストを構築中...")
-            data_context = self._build_data_context(question)
+            data_context = self._build_data_context(question, site_name=site_name)
             
             if not data_context or not data_context.strip():
                 logger.warning("データコンテキストが空です")

@@ -60,12 +60,19 @@ Render.comで環境変数を設定する方法を説明します。
 - **Key**: `GA4_PROPERTY_ID`
 - **Value**: `316302380`
 
-#### 環境変数4: GSC_SITE_URL
+#### 環境変数4: GSC_SITE_URL_MOODMARK
 
-- **Key**: `GSC_SITE_URL`
+- **Key**: `GSC_SITE_URL_MOODMARK`
 - **Value**: `https://isetan.mistore.jp/moodmark/`
+- **注意**: 後方互換性のため、`GSC_SITE_URL`も使用可能です（MOODMARKサイト用）
 
-#### 環境変数5: PAGESPEED_INSIGHTS_API_KEY（オプション）
+#### 環境変数5: GSC_SITE_URL_MOODMARKGIFT
+
+- **Key**: `GSC_SITE_URL_MOODMARKGIFT`
+- **Value**: `https://isetan.mistore.jp/moodmarkgift/`
+- **注意**: MOODMARK GIFTサイトのデータを取得する場合は必須です
+
+#### 環境変数6: PAGESPEED_INSIGHTS_API_KEY（オプション）
 
 - **Key**: `PAGESPEED_INSIGHTS_API_KEY`
 - **Value**: あなたのPage Speed Insights APIキー

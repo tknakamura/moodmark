@@ -60,7 +60,30 @@ with st.sidebar:
     
     st.header("⚙️ 設定")
     
+    # サイト選択
+    st.subheader("🌐 サイト選択")
+    if 'selected_site' not in st.session_state:
+        st.session_state.selected_site = 'moodmark'
+    
+    site_options = {
+        'moodmark': 'MOODMARK (https://isetan.mistore.jp/moodmark/)',
+        'moodmarkgift': 'MOODMARK GIFT (https://isetan.mistore.jp/moodmarkgift/)'
+    }
+    
+    selected_site = st.radio(
+        "分析するサイトを選択",
+        options=list(site_options.keys()),
+        format_func=lambda x: site_options[x],
+        index=0 if st.session_state.selected_site == 'moodmark' else 1,
+        key="site_selector"
+    )
+    st.session_state.selected_site = selected_site
+    st.caption(f"選択中: {site_options[selected_site]}")
+    
+    st.markdown("---")
+    
     # モデル選択
+    st.subheader("🤖 AIモデル")
     available_models = [
         "gpt-4o-mini",
         "gpt-4o",
@@ -202,7 +225,7 @@ with st.sidebar:
         with col2:
             if st.button("🔍 GSC接続テスト", use_container_width=True, key="test_gsc_button"):
                 with st.spinner("GSC接続をテスト中..."):
-                    test_result = st.session_state.ai_chat.google_apis.test_gsc_connection()
+                    test_result = st.session_state.ai_chat.google_apis.test_gsc_connection(site_name=st.session_state.selected_site)
                     if test_result['success']:
                         st.success(test_result['message'])
                         if test_result.get('data_sample'):
@@ -211,6 +234,31 @@ with st.sidebar:
                         st.error(test_result['message'])
                         if test_result.get('error'):
                             st.caption(f"エラー: {test_result['error']}")
+    
+    # 両サイトの接続状態を表示
+    st.markdown("---")
+    st.subheader("📊 両サイトの接続状態")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**MOODMARK**")
+        if st.button("🔍 テスト", key="test_moodmark", use_container_width=True):
+            with st.spinner("MOODMARK接続をテスト中..."):
+                test_result = st.session_state.ai_chat.google_apis.test_gsc_connection(site_name='moodmark')
+                if test_result['success']:
+                    st.success("✅ 接続成功")
+                else:
+                    st.error("❌ 接続失敗")
+    
+    with col2:
+        st.markdown("**MOODMARK GIFT**")
+        if st.button("🔍 テスト", key="test_moodmarkgift", use_container_width=True):
+            with st.spinner("MOODMARK GIFT接続をテスト中..."):
+                test_result = st.session_state.ai_chat.google_apis.test_gsc_connection(site_name='moodmarkgift')
+                if test_result['success']:
+                    st.success("✅ 接続成功")
+                else:
+                    st.error("❌ 接続失敗")
     
     st.markdown("---")
     
@@ -344,7 +392,8 @@ if prompt := st.chat_input(chat_placeholder):
                 try:
                     answer = st.session_state.ai_chat.ask(
                         question,
-                        model=st.session_state.model
+                        model=st.session_state.model,
+                        site_name=st.session_state.selected_site
                     )
                     progress_steps.empty()
                     status_container.empty()

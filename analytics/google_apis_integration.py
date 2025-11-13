@@ -35,7 +35,15 @@ class GoogleAPIsIntegration:
         
         # 環境変数から設定を取得
         self.ga4_property_id = os.getenv('GA4_PROPERTY_ID')
-        self.gsc_site_url = os.getenv('GSC_SITE_URL')
+        
+        # 複数GSCサイトURLの読み込み
+        self.gsc_site_urls = {
+            'moodmark': os.getenv('GSC_SITE_URL_MOODMARK') or os.getenv('GSC_SITE_URL') or 'https://isetan.mistore.jp/moodmark/',
+            'moodmarkgift': os.getenv('GSC_SITE_URL_MOODMARKGIFT') or 'https://isetan.mistore.jp/moodmarkgift/'
+        }
+        # 後方互換性のため、既存のgsc_site_urlも保持
+        self.gsc_site_url = self.gsc_site_urls.get('moodmark')
+        
         self.pagespeed_api_key = os.getenv('PAGESPEED_INSIGHTS_API_KEY')
         
         self._authenticate()
@@ -200,6 +208,15 @@ class GoogleAPIsIntegration:
             status['errors'].append('GA4_PROPERTY_IDが設定されていません')
         
         # GSCサイトURLの確認
+        status['gsc_site_urls'] = {}
+        for site_name, site_url in self.gsc_site_urls.items():
+            if site_url:
+                status['gsc_site_urls'][site_name] = True
+            else:
+                status['gsc_site_urls'][site_name] = False
+                status['warnings'].append(f'GSC_SITE_URL_{site_name.upper()}が設定されていません')
+        
+        # 後方互換性のため
         if self.gsc_site_url:
             status['gsc_site_url_set'] = True
         else:
@@ -289,9 +306,12 @@ class GoogleAPIsIntegration:
         
         return result
     
-    def test_gsc_connection(self) -> Dict[str, Any]:
+    def test_gsc_connection(self, site_name='moodmark') -> Dict[str, Any]:
         """
         GSC APIへの接続をテスト
+        
+        Args:
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
         
         Returns:
             dict: テスト結果
@@ -300,7 +320,8 @@ class GoogleAPIsIntegration:
             'success': False,
             'message': '',
             'error': None,
-            'data_sample': None
+            'data_sample': None,
+            'site_name': site_name
         }
         
         if not self.gsc_service:
@@ -308,9 +329,11 @@ class GoogleAPIsIntegration:
             result['message'] = '認証が完了していない可能性があります。環境変数を確認してください。'
             return result
         
-        if not self.gsc_site_url:
-            result['error'] = 'GSCサイトURLが設定されていません'
-            result['message'] = '環境変数GSC_SITE_URLを設定してください。'
+        # サイトURLの取得
+        gsc_site_url = self.gsc_site_urls.get(site_name)
+        if not gsc_site_url:
+            result['error'] = f'GSCサイトURLが設定されていません（サイト: {site_name}）'
+            result['message'] = f'環境変数GSC_SITE_URL_{site_name.upper()}またはGSC_SITE_URLを設定してください。'
             return result
         
         try:
@@ -325,32 +348,32 @@ class GoogleAPIsIntegration:
                 'rowLimit': 10
             }
             
-            logger.info(f"GSC接続テスト開始: サイトURL={self.gsc_site_url}")
+            logger.info(f"GSC接続テスト開始: サイト={site_name}, URL={gsc_site_url}")
             response = self.gsc_service.searchanalytics().query(
-                siteUrl=self.gsc_site_url,
+                siteUrl=gsc_site_url,
                 body=request
             ).execute()
             
             # レスポンスの確認
             row_count = len(response.get('rows', []))
             result['success'] = True
-            result['message'] = f'GSC接続成功: {row_count}件のデータを取得しました'
+            result['message'] = f'GSC接続成功 ({site_name}): {row_count}件のデータを取得しました'
             result['data_sample'] = {
                 'row_count': row_count,
                 'date_range': f'{start_date} ～ {end_date}'
             }
-            logger.info(f"GSC接続テスト成功: {row_count}件のデータを取得")
+            logger.info(f"GSC接続テスト成功 ({site_name}): {row_count}件のデータを取得")
             
         except HttpError as e:
             error_details = json.loads(e.content.decode('utf-8')) if e.content else {}
             error_reason = error_details.get('error', {}).get('message', str(e))
             result['error'] = f'GSC API エラー: {error_reason}'
-            result['message'] = f'GSC APIへの接続に失敗しました: {error_reason}'
-            logger.error(f"GSC接続テストエラー: {error_reason}")
+            result['message'] = f'GSC APIへの接続に失敗しました ({site_name}): {error_reason}'
+            logger.error(f"GSC接続テストエラー ({site_name}): {error_reason}")
         except Exception as e:
             result['error'] = f'接続エラー: {str(e)}'
-            result['message'] = f'GSCへの接続中にエラーが発生しました: {str(e)}'
-            logger.error(f"GSC接続テストエラー: {e}", exc_info=True)
+            result['message'] = f'GSCへの接続中にエラーが発生しました ({site_name}): {str(e)}'
+            logger.error(f"GSC接続テストエラー ({site_name}): {e}", exc_info=True)
         
         return result
     
@@ -674,7 +697,7 @@ class GoogleAPIsIntegration:
             logger.error(f"GA4データ取得エラー: {e}")
             return pd.DataFrame()
     
-    def get_gsc_data(self, date_range_days=30, dimensions=None, row_limit=25000):
+    def get_gsc_data(self, date_range_days=30, dimensions=None, row_limit=25000, site_name='moodmark'):
         """
         Google Search Consoleからデータを取得
         
@@ -682,6 +705,7 @@ class GoogleAPIsIntegration:
             date_range_days (int): 取得する日数
             dimensions (list): 取得するディメンション
             row_limit (int): 取得行数上限
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
         
         Returns:
             pd.DataFrame: GSCデータ
@@ -690,8 +714,10 @@ class GoogleAPIsIntegration:
             logger.error("GSCサービスが初期化されていません。認証ファイルを確認してください。")
             return pd.DataFrame()
         
-        if not self.gsc_site_url:
-            logger.error("GSCサイトURLが設定されていません。環境変数GSC_SITE_URLを確認してください。")
+        # サイトURLの取得
+        gsc_site_url = self.gsc_site_urls.get(site_name)
+        if not gsc_site_url:
+            logger.error(f"GSCサイトURLが設定されていません（サイト: {site_name}）。環境変数を確認してください。")
             return pd.DataFrame()
         
         # デフォルトディメンション
@@ -713,8 +739,9 @@ class GoogleAPIsIntegration:
             }
             
             # API呼び出し
+            logger.info(f"GSCデータ取得: サイト={site_name}, URL={gsc_site_url}, 期間={date_range_days}日")
             response = self.gsc_service.searchanalytics().query(
-                siteUrl=self.gsc_site_url,
+                siteUrl=gsc_site_url,
                 body=request
             ).execute()
             
@@ -750,13 +777,14 @@ class GoogleAPIsIntegration:
             logger.error(f"GSCデータ取得エラー: {e}", exc_info=True)
             return pd.DataFrame()
     
-    def get_top_pages_gsc(self, date_range_days=30, limit=100):
+    def get_top_pages_gsc(self, date_range_days=30, limit=100, site_name='moodmark'):
         """
         GSCから上位ページデータを取得
         
         Args:
             date_range_days (int): 取得する日数
             limit (int): 取得件数
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
         
         Returns:
             pd.DataFrame: 上位ページデータ
@@ -764,7 +792,8 @@ class GoogleAPIsIntegration:
         gsc_data = self.get_gsc_data(
             date_range_days=date_range_days,
             dimensions=['page'],
-            row_limit=limit
+            row_limit=limit,
+            site_name=site_name
         )
         
         if gsc_data.empty:
@@ -787,13 +816,14 @@ class GoogleAPIsIntegration:
         
         return page_stats
     
-    def get_top_queries_gsc(self, date_range_days=30, limit=100):
+    def get_top_queries_gsc(self, date_range_days=30, limit=100, site_name='moodmark'):
         """
         GSCから上位クエリデータを取得
         
         Args:
             date_range_days (int): 取得する日数
             limit (int): 取得件数
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
         
         Returns:
             pd.DataFrame: 上位クエリデータ
@@ -801,7 +831,8 @@ class GoogleAPIsIntegration:
         gsc_data = self.get_gsc_data(
             date_range_days=date_range_days,
             dimensions=['query'],
-            row_limit=limit
+            row_limit=limit,
+            site_name=site_name
         )
         
         if gsc_data.empty:
@@ -824,13 +855,14 @@ class GoogleAPIsIntegration:
         
         return query_stats
     
-    def get_page_specific_gsc_data(self, page_url: str, date_range_days=30):
+    def get_page_specific_gsc_data(self, page_url: str, date_range_days=30, site_name='moodmark'):
         """
         特定ページのGSCデータを取得
         
         Args:
             page_url (str): 分析するページのURL
             date_range_days (int): 取得する日数
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
             
         Returns:
             dict: ページのGSCデータ（クリック数、インプレッション数、CTR、平均順位など）
@@ -853,7 +885,8 @@ class GoogleAPIsIntegration:
             gsc_data = self.get_gsc_data(
                 date_range_days=date_range_days,
                 dimensions=['page', 'date'],
-                row_limit=25000
+                row_limit=25000,
+                site_name=site_name
             )
             
             if gsc_data.empty:
@@ -913,13 +946,14 @@ class GoogleAPIsIntegration:
                 'error': f'データ取得エラー: {str(e)}'
             }
     
-    def get_yearly_comparison_gsc(self, page_url: str = None, date_range_days=30):
+    def get_yearly_comparison_gsc(self, page_url: str = None, date_range_days=30, site_name='moodmark'):
         """
         年次比較用のGSCデータを取得（今年と昨年の同じ期間）
         
         Args:
             page_url (str): 分析するページのURL（オプション、指定されない場合は全体）
             date_range_days (int): 比較する期間の日数
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
             
         Returns:
             dict: 今年と昨年のGSCデータの比較
@@ -947,14 +981,14 @@ class GoogleAPIsIntegration:
             
             # 今年のデータ取得
             if page_url:
-                this_year_data = self.get_page_specific_gsc_data(page_url, date_range_days)
+                this_year_data = self.get_page_specific_gsc_data(page_url, date_range_days, site_name=site_name)
                 # エラーが含まれている場合は、エラーを返す
                 if 'error' in this_year_data:
                     return {
                         'error': this_year_data.get('error', '今年のデータ取得エラー')
                     }
             else:
-                gsc_data = self.get_gsc_data(date_range_days=date_range_days, dimensions=['page'])
+                gsc_data = self.get_gsc_data(date_range_days=date_range_days, dimensions=['page'], site_name=site_name)
                 if not gsc_data.empty:
                     this_year_data = {
                         'clicks': int(gsc_data['clicks'].sum()),
@@ -972,7 +1006,8 @@ class GoogleAPIsIntegration:
             last_year_gsc_data = self._get_gsc_data_custom_range(
                 start_date=last_year_start.strftime('%Y-%m-%d'),
                 end_date=last_year_end.strftime('%Y-%m-%d'),
-                page_url=page_url
+                page_url=page_url,
+                site_name=site_name
             )
             
             if page_url and 'error' not in last_year_gsc_data:
@@ -1034,7 +1069,7 @@ class GoogleAPIsIntegration:
                 'error': f'年次比較データ取得エラー: {str(e)}'
             }
     
-    def _get_gsc_data_custom_range(self, start_date: str, end_date: str, page_url: str = None):
+    def _get_gsc_data_custom_range(self, start_date: str, end_date: str, page_url: str = None, site_name='moodmark'):
         """
         カスタム日付範囲でGSCデータを取得（内部メソッド）
         
@@ -1042,6 +1077,7 @@ class GoogleAPIsIntegration:
             start_date (str): 開始日 (YYYY-MM-DD)
             end_date (str): 終了日 (YYYY-MM-DD)
             page_url (str): ページURL（オプション）
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
             
         Returns:
             pd.DataFrame or dict: GSCデータ
@@ -1051,8 +1087,10 @@ class GoogleAPIsIntegration:
             logger.error(error_msg)
             return pd.DataFrame() if not page_url else {'error': error_msg}
         
-        if not self.gsc_site_url:
-            error_msg = 'GSCサイトURLが設定されていません。環境変数GSC_SITE_URLを確認してください。'
+        # サイトURLの取得
+        gsc_site_url = self.gsc_site_urls.get(site_name)
+        if not gsc_site_url:
+            error_msg = f'GSCサイトURLが設定されていません（サイト: {site_name}）。環境変数を確認してください。'
             logger.error(error_msg)
             return pd.DataFrame() if not page_url else {'error': error_msg}
         
@@ -1066,8 +1104,9 @@ class GoogleAPIsIntegration:
                 'startRow': 0
             }
             
+            logger.info(f"GSCデータ取得（カスタム範囲）: サイト={site_name}, URL={gsc_site_url}, 期間={start_date} ～ {end_date}")
             response = self.gsc_service.searchanalytics().query(
-                siteUrl=self.gsc_site_url,
+                siteUrl=gsc_site_url,
                 body=request
             ).execute()
             

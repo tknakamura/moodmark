@@ -44,17 +44,22 @@ python scripts/prepare_credentials_for_render.py
 - **Key**: `GA4_PROPERTY_ID`
 - **Value**: `316302380`
 
-#### 環境変数3: GSC_SITE_URL
+#### 環境変数3: GSC_SITE_URL_MOODMARK
 
-- **Key**: `GSC_SITE_URL`
+- **Key**: `GSC_SITE_URL_MOODMARK`
 - **Value**: `https://isetan.mistore.jp/moodmark/`
 
-#### 環境変数4: OPENAI_API_KEY
+#### 環境変数4: GSC_SITE_URL_MOODMARKGIFT
+
+- **Key**: `GSC_SITE_URL_MOODMARKGIFT`
+- **Value**: `https://isetan.mistore.jp/moodmarkgift/`
+
+#### 環境変数5: OPENAI_API_KEY
 
 - **Key**: `OPENAI_API_KEY`
 - **Value**: あなたのOpenAI APIキー（例: `sk-...`）
 
-#### 環境変数5: PAGESPEED_INSIGHTS_API_KEY（オプション）
+#### 環境変数6: PAGESPEED_INSIGHTS_API_KEY（オプション）
 
 - **Key**: `PAGESPEED_INSIGHTS_API_KEY`
 - **Value**: あなたのPage Speed Insights APIキー
@@ -73,7 +78,9 @@ python scripts/prepare_credentials_for_render.py
 サイドバーの「📊 Google APIs接続状態」セクションで、以下が表示されることを確認してください：
 
 - ✅ GA4: 接続済み
-- ✅ GSC: 接続済み
+- ✅ GSC: 接続済み（両サイト）
+
+また、「📊 両サイトの接続状態」セクションで、MOODMARKとMOODMARK GIFTの両方の接続状態を確認できます。
 
 ## トラブルシューティング
 
