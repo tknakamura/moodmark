@@ -305,6 +305,265 @@ class GoogleAPIsIntegration:
         
         return query_stats
     
+    def get_page_specific_gsc_data(self, page_url: str, date_range_days=30):
+        """
+        特定ページのGSCデータを取得
+        
+        Args:
+            page_url (str): 分析するページのURL
+            date_range_days (int): 取得する日数
+            
+        Returns:
+            dict: ページのGSCデータ（クリック数、インプレッション数、CTR、平均順位など）
+        """
+        try:
+            # ページURLを正規化（サイトURLとの相対パスに変換）
+            from urllib.parse import urlparse
+            parsed_url = urlparse(page_url)
+            page_path = parsed_url.path
+            
+            # GSCデータを取得（ページディメンションで）
+            gsc_data = self.get_gsc_data(
+                date_range_days=date_range_days,
+                dimensions=['page', 'date'],
+                row_limit=25000
+            )
+            
+            if gsc_data.empty:
+                logger.warning(f"ページ固有のGSCデータが見つかりませんでした: {page_path}")
+                return {
+                    'page_url': page_url,
+                    'page_path': page_path,
+                    'clicks': 0,
+                    'impressions': 0,
+                    'ctr': 0.0,
+                    'avg_position': 0.0,
+                    'error': 'データが見つかりませんでした'
+                }
+            
+            # 指定されたページのデータをフィルタリング
+            # ページパスが完全一致または部分一致するものを検索
+            page_data = gsc_data[
+                gsc_data['page'].str.contains(page_path, case=False, na=False)
+            ]
+            
+            if page_data.empty:
+                logger.warning(f"ページ '{page_path}' のデータが見つかりませんでした")
+                return {
+                    'page_url': page_url,
+                    'page_path': page_path,
+                    'clicks': 0,
+                    'impressions': 0,
+                    'ctr': 0.0,
+                    'avg_position': 0.0,
+                    'error': f'ページ "{page_path}" のデータが見つかりませんでした'
+                }
+            
+            # 集計
+            total_clicks = page_data['clicks'].sum()
+            total_impressions = page_data['impressions'].sum()
+            avg_ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0.0
+            avg_position = page_data['position'].mean()
+            
+            logger.info(f"ページ固有のGSCデータ取得完了: {page_path}")
+            logger.info(f"  クリック数: {total_clicks:,}, インプレッション数: {total_impressions:,}")
+            logger.info(f"  CTR: {avg_ctr:.2f}%, 平均順位: {avg_position:.2f}")
+            
+            return {
+                'page_url': page_url,
+                'page_path': page_path,
+                'clicks': int(total_clicks),
+                'impressions': int(total_impressions),
+                'ctr': round(avg_ctr, 2),
+                'avg_position': round(avg_position, 2),
+                'date_range_days': date_range_days
+            }
+            
+        except Exception as e:
+            logger.error(f"ページ固有のGSCデータ取得エラー ({page_url}): {e}")
+            return {
+                'page_url': page_url,
+                'error': f'データ取得エラー: {str(e)}'
+            }
+    
+    def get_yearly_comparison_gsc(self, page_url: str = None, date_range_days=30):
+        """
+        年次比較用のGSCデータを取得（今年と昨年の同じ期間）
+        
+        Args:
+            page_url (str): 分析するページのURL（オプション、指定されない場合は全体）
+            date_range_days (int): 比較する期間の日数
+            
+        Returns:
+            dict: 今年と昨年のGSCデータの比較
+        """
+        try:
+            from datetime import datetime, timedelta
+            
+            # 今年の期間
+            this_year_end = datetime.now()
+            this_year_start = this_year_end - timedelta(days=date_range_days)
+            
+            # 昨年の同じ期間
+            last_year_end = datetime(this_year_end.year - 1, this_year_end.month, this_year_end.day)
+            last_year_start = last_year_end - timedelta(days=date_range_days)
+            
+            logger.info(f"年次比較データ取得: 今年 {this_year_start.strftime('%Y-%m-%d')} ～ {this_year_end.strftime('%Y-%m-%d')}")
+            logger.info(f"                  昨年 {last_year_start.strftime('%Y-%m-%d')} ～ {last_year_end.strftime('%Y-%m-%d')}")
+            
+            # 今年のデータ取得
+            if page_url:
+                this_year_data = self.get_page_specific_gsc_data(page_url, date_range_days)
+            else:
+                gsc_data = self.get_gsc_data(date_range_days=date_range_days, dimensions=['page'])
+                if not gsc_data.empty:
+                    this_year_data = {
+                        'clicks': int(gsc_data['clicks'].sum()),
+                        'impressions': int(gsc_data['impressions'].sum()),
+                        'ctr': round((gsc_data['clicks'].sum() / gsc_data['impressions'].sum() * 100) if gsc_data['impressions'].sum() > 0 else 0, 2),
+                        'avg_position': round(gsc_data['position'].mean(), 2)
+                    }
+                else:
+                    this_year_data = {'clicks': 0, 'impressions': 0, 'ctr': 0.0, 'avg_position': 0.0}
+            
+            # 昨年のデータ取得（カスタム日付範囲で取得）
+            last_year_gsc_data = self._get_gsc_data_custom_range(
+                start_date=last_year_start.strftime('%Y-%m-%d'),
+                end_date=last_year_end.strftime('%Y-%m-%d'),
+                page_url=page_url
+            )
+            
+            if page_url and 'error' not in last_year_gsc_data:
+                last_year_data = last_year_gsc_data
+            elif not page_url and not last_year_gsc_data.empty:
+                last_year_data = {
+                    'clicks': int(last_year_gsc_data['clicks'].sum()),
+                    'impressions': int(last_year_gsc_data['impressions'].sum()),
+                    'ctr': round((last_year_gsc_data['clicks'].sum() / last_year_gsc_data['impressions'].sum() * 100) if last_year_gsc_data['impressions'].sum() > 0 else 0, 2),
+                    'avg_position': round(last_year_gsc_data['position'].mean(), 2)
+                }
+            else:
+                last_year_data = {'clicks': 0, 'impressions': 0, 'ctr': 0.0, 'avg_position': 0.0}
+            
+            # 比較計算
+            clicks_change = this_year_data.get('clicks', 0) - last_year_data.get('clicks', 0)
+            clicks_change_pct = (clicks_change / last_year_data.get('clicks', 1) * 100) if last_year_data.get('clicks', 0) > 0 else 0
+            
+            impressions_change = this_year_data.get('impressions', 0) - last_year_data.get('impressions', 0)
+            impressions_change_pct = (impressions_change / last_year_data.get('impressions', 1) * 100) if last_year_data.get('impressions', 0) > 0 else 0
+            
+            ctr_change = this_year_data.get('ctr', 0) - last_year_data.get('ctr', 0)
+            position_change = this_year_data.get('avg_position', 0) - last_year_data.get('avg_position', 0)
+            
+            comparison = {
+                'this_year': {
+                    'period': f"{this_year_start.strftime('%Y-%m-%d')} ～ {this_year_end.strftime('%Y-%m-%d')}",
+                    'clicks': this_year_data.get('clicks', 0),
+                    'impressions': this_year_data.get('impressions', 0),
+                    'ctr': this_year_data.get('ctr', 0.0),
+                    'avg_position': this_year_data.get('avg_position', 0.0)
+                },
+                'last_year': {
+                    'period': f"{last_year_start.strftime('%Y-%m-%d')} ～ {last_year_end.strftime('%Y-%m-%d')}",
+                    'clicks': last_year_data.get('clicks', 0),
+                    'impressions': last_year_data.get('impressions', 0),
+                    'ctr': last_year_data.get('ctr', 0.0),
+                    'avg_position': last_year_data.get('avg_position', 0.0)
+                },
+                'changes': {
+                    'clicks': clicks_change,
+                    'clicks_change_pct': round(clicks_change_pct, 1),
+                    'impressions': impressions_change,
+                    'impressions_change_pct': round(impressions_change_pct, 1),
+                    'ctr': round(ctr_change, 2),
+                    'position': round(position_change, 2)
+                }
+            }
+            
+            logger.info(f"年次比較完了:")
+            logger.info(f"  クリック数: {this_year_data.get('clicks', 0):,} ({clicks_change:+,}, {clicks_change_pct:+.1f}%)")
+            logger.info(f"  インプレッション数: {this_year_data.get('impressions', 0):,} ({impressions_change:+,}, {impressions_change_pct:+.1f}%)")
+            
+            return comparison
+            
+        except Exception as e:
+            logger.error(f"年次比較データ取得エラー: {e}", exc_info=True)
+            return {
+                'error': f'年次比較データ取得エラー: {str(e)}'
+            }
+    
+    def _get_gsc_data_custom_range(self, start_date: str, end_date: str, page_url: str = None):
+        """
+        カスタム日付範囲でGSCデータを取得（内部メソッド）
+        
+        Args:
+            start_date (str): 開始日 (YYYY-MM-DD)
+            end_date (str): 終了日 (YYYY-MM-DD)
+            page_url (str): ページURL（オプション）
+            
+        Returns:
+            pd.DataFrame or dict: GSCデータ
+        """
+        if not self.gsc_service or not self.gsc_site_url:
+            return pd.DataFrame() if not page_url else {'error': 'GSCサービスが設定されていません'}
+        
+        try:
+            dimensions = ['page', 'date'] if page_url else ['page']
+            request = {
+                'startDate': start_date,
+                'endDate': end_date,
+                'dimensions': dimensions,
+                'rowLimit': 25000,
+                'startRow': 0
+            }
+            
+            response = self.gsc_service.searchanalytics().query(
+                siteUrl=self.gsc_site_url,
+                body=request
+            ).execute()
+            
+            data = []
+            if 'rows' in response:
+                for row in response['rows']:
+                    row_data = {
+                        'clicks': row.get('clicks', 0),
+                        'impressions': row.get('impressions', 0),
+                        'ctr': row.get('ctr', 0),
+                        'position': row.get('position', 0)
+                    }
+                    
+                    for i, dimension in enumerate(dimensions):
+                        if i < len(row.get('keys', [])):
+                            row_data[dimension] = row['keys'][i]
+                    data.append(row_data)
+            
+            df = pd.DataFrame(data)
+            
+            if page_url:
+                # ページURLでフィルタリング
+                from urllib.parse import urlparse
+                parsed_url = urlparse(page_url)
+                page_path = parsed_url.path
+                page_data = df[df['page'].str.contains(page_path, case=False, na=False)]
+                
+                if page_data.empty:
+                    return {'error': f'ページ "{page_path}" のデータが見つかりませんでした'}
+                
+                total_clicks = page_data['clicks'].sum()
+                total_impressions = page_data['impressions'].sum()
+                return {
+                    'clicks': int(total_clicks),
+                    'impressions': int(total_impressions),
+                    'ctr': round((total_clicks / total_impressions * 100) if total_impressions > 0 else 0, 2),
+                    'avg_position': round(page_data['position'].mean(), 2)
+                }
+            
+            return df
+            
+        except Exception as e:
+            logger.error(f"カスタム日付範囲のGSCデータ取得エラー: {e}")
+            return pd.DataFrame() if not page_url else {'error': str(e)}
+    
     def export_to_csv(self, data, filename, output_dir='data/processed'):
         """
         データをCSVファイルにエクスポート

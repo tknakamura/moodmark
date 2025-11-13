@@ -90,13 +90,20 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
 - H2/H3の見出しテキストは、具体的に列挙し、その品質を評価してください
 - 見出しテキストの長さ、キーワード含有率、重複などの問題を具体的に指摘し、改善案を提示してください
 
+【データに基づいた回答の重要性】
+- GSC/GA4データが提供されている場合は、必ずそのデータを使用して回答してください
+- 年次比較データが提供されている場合は、昨年と今年の数値を比較して分析してください
+- 特定ページのデータが提供されている場合は、そのページの具体的な数値を示してください
+- データがない場合は、データが取得できなかった旨を明記してください
+
 【一般的な回答の注意点】
 - データは数値で正確に示す
 - トレンドや変化を明確に説明する
 - 専門用語を使う場合は簡潔に説明する
 - 日本語で回答する
 - SEO改善以外の質問でも、可能な限り構造化して回答する
-- 見出しテキストが提供されている場合は、必ず具体的な見出しテキストを回答に含めてください"""
+- 見出しテキストが提供されている場合は、必ず具体的な見出しテキストを回答に含めてください
+- GSC/GA4データが提供されている場合は、SEO分析だけでなく、実際のトラフィックデータも分析してください"""
     
     def _extract_date_range(self, question: str) -> int:
         """
@@ -298,17 +305,27 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             'コンテンツ分析', '改善提案', '最適化'
         ]) or len(urls) > 0
         
+        # 年次比較が必要かどうかを判定
+        needs_yearly_comparison = any(keyword in question_lower for keyword in [
+            '昨年', '今年', '前年', '前年比', 'yoy', 'year over year', '比較',
+            '比べて', '対比', '変化', '増減', '推移', 'トレンド'
+        ])
+        
+        # 特定ページの分析が必要かどうかを判定
+        needs_page_specific_analysis = len(urls) > 0
+        
         # GA4データが必要かどうかを判定
         needs_ga4 = any(keyword in question_lower for keyword in [
             'トラフィック', 'セッション', 'ユーザー', 'ページビュー', 'バウンス', 
-            '滞在時間', 'コンバージョン', '売上', '収益', 'アクセス'
-        ])
+            '滞在時間', 'コンバージョン', '売上', '収益', 'アクセス', '集客',
+            'オーガニック', '流入', '訪問', '来訪'
+        ]) or needs_yearly_comparison or needs_page_specific_analysis
         
         # GSCデータが必要かどうかを判定
         needs_gsc = any(keyword in question_lower for keyword in [
             '検索', 'seo', 'クリック', 'インプレッション', 'ctr', 'ポジション', 
-            '順位', 'キーワード', 'クエリ', '検索流入'
-        ])
+            '順位', 'キーワード', 'クエリ', '検索流入', 'オーガニック', '集客'
+        ]) or needs_yearly_comparison or needs_page_specific_analysis
         
         # SEO分析を実行（URLが含まれている場合、またはSEO関連の質問の場合）
         if needs_seo_analysis:
@@ -581,6 +598,69 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                     context_parts.append("ページの取得または解析中にエラーが発生しました。URLが正しいか、ページがアクセス可能か確認してください。")
                     context_parts.append("")
         
+        # 年次比較データの取得
+        if needs_yearly_comparison:
+            logger.info("年次比較データを取得中...")
+            page_url_for_comparison = urls[0] if urls else None
+            yearly_comparison = self.google_apis.get_yearly_comparison_gsc(
+                page_url=page_url_for_comparison,
+                date_range_days=date_range
+            )
+            
+            if 'error' not in yearly_comparison:
+                context_parts.append("=== 年次比較データ（GSC） ===")
+                context_parts.append("")
+                context_parts.append("【今年のデータ】")
+                this_year = yearly_comparison.get('this_year', {})
+                context_parts.append(f"期間: {this_year.get('period', 'N/A')}")
+                context_parts.append(f"クリック数: {this_year.get('clicks', 0):,}")
+                context_parts.append(f"インプレッション数: {this_year.get('impressions', 0):,}")
+                context_parts.append(f"CTR: {this_year.get('ctr', 0):.2f}%")
+                context_parts.append(f"平均検索順位: {this_year.get('avg_position', 0):.2f}位")
+                context_parts.append("")
+                
+                context_parts.append("【昨年のデータ（同じ期間）】")
+                last_year = yearly_comparison.get('last_year', {})
+                context_parts.append(f"期間: {last_year.get('period', 'N/A')}")
+                context_parts.append(f"クリック数: {last_year.get('clicks', 0):,}")
+                context_parts.append(f"インプレッション数: {last_year.get('impressions', 0):,}")
+                context_parts.append(f"CTR: {last_year.get('ctr', 0):.2f}%")
+                context_parts.append(f"平均検索順位: {last_year.get('avg_position', 0):.2f}位")
+                context_parts.append("")
+                
+                context_parts.append("【変化率】")
+                changes = yearly_comparison.get('changes', {})
+                context_parts.append(f"クリック数: {changes.get('clicks', 0):+,} ({changes.get('clicks_change_pct', 0):+.1f}%)")
+                context_parts.append(f"インプレッション数: {changes.get('impressions', 0):+,} ({changes.get('impressions_change_pct', 0):+.1f}%)")
+                context_parts.append(f"CTR: {changes.get('ctr', 0):+.2f}%ポイント")
+                context_parts.append(f"平均検索順位: {changes.get('position', 0):+.2f}位")
+                context_parts.append("")
+                context_parts.append("上記の年次比較データを基に、昨年と比べて今年のオーガニック集客がどう変化したかを分析してください。")
+                context_parts.append("")
+            elif 'error' in yearly_comparison:
+                context_parts.append(f"⚠️ 年次比較データ取得エラー: {yearly_comparison.get('error', 'Unknown error')}")
+                context_parts.append("")
+        
+        # 特定ページのGSCデータ取得
+        if needs_page_specific_analysis and urls:
+            logger.info(f"特定ページのGSCデータを取得中: {urls[0]}")
+            page_gsc_data = self.google_apis.get_page_specific_gsc_data(
+                page_url=urls[0],
+                date_range_days=date_range
+            )
+            
+            if 'error' not in page_gsc_data:
+                context_parts.append(f"=== 特定ページのGSCデータ: {urls[0]} ===")
+                context_parts.append(f"期間: 過去{date_range}日間")
+                context_parts.append(f"クリック数: {page_gsc_data.get('clicks', 0):,}")
+                context_parts.append(f"インプレッション数: {page_gsc_data.get('impressions', 0):,}")
+                context_parts.append(f"CTR: {page_gsc_data.get('ctr', 0):.2f}%")
+                context_parts.append(f"平均検索順位: {page_gsc_data.get('avg_position', 0):.2f}位")
+                context_parts.append("")
+            elif 'error' in page_gsc_data:
+                context_parts.append(f"⚠️ 特定ページのGSCデータ取得エラー: {page_gsc_data.get('error', 'Unknown error')}")
+                context_parts.append("")
+        
         if needs_ga4:
             ga4_summary = self._get_ga4_summary(date_range)
             if "error" not in ga4_summary:
@@ -691,8 +771,34 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 'コンテンツ分析', '改善提案', '最適化', '改善点', '課題'
             ]) or len(self._extract_urls(question)) > 0
             
+            # 年次比較が要求されているかどうかを判定
+            question_lower = question.lower()
+            is_yearly_comparison = any(keyword in question_lower for keyword in [
+                '昨年', '今年', '前年', '前年比', 'yoy', 'year over year', '比較',
+                '比べて', '対比', '変化', '増減', '推移', 'トレンド'
+            ])
+            
             # プロンプトを構築
-            if is_seo_question:
+            if is_yearly_comparison:
+                user_prompt = f"""以下のデータを基に、ユーザーの質問に回答してください。
+
+**重要**: 年次比較データが提供されている場合は、必ず昨年と今年の数値を比較して分析してください。
+- クリック数、インプレッション数、CTR、平均検索順位の変化を具体的に示してください
+- 増減率を計算して、改善しているか悪化しているかを明確に示してください
+- 変化の原因を推測し、改善提案を提示してください
+
+質問: {question}
+
+データ:
+{data_context}
+
+回答には以下を含めてください:
+- 昨年と今年の数値の比較
+- 増減率の計算
+- 変化の分析と原因の推測
+- 改善提案（該当する場合）
+- わかりやすい日本語で説明"""
+            elif is_seo_question:
                 user_prompt = f"""以下のSEO分析データを基に、ユーザーの質問に回答してください。
 
 {data_context}
