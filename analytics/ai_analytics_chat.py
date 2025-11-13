@@ -1473,7 +1473,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 '月間', '数値', 'レポート', 'report', 'データ', '統計', '分析'
             ]) or len(urls) > 0
             
-            # 各ステップの進捗をyield
+            # データコンテキストを構築（進捗をyieldしながら）
+            # _build_data_contextを呼び出す前に、各ステップの開始をyield
             if needs_seo_analysis and urls:
                 yield "[STEP] 🔍 SEO分析を実行中...\n"
             
@@ -1483,7 +1484,10 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             if needs_ga4:
                 yield "[STEP] 📈 GA4データを取得中...\n"
             
-            # データコンテキストを構築（ask()と同じロジック）
+            # データコンテキストを構築
+            # 注意: _build_data_contextは同期的に実行されるため、
+            # 各ステップの進捗をyieldするには、_build_data_contextを修正する必要がある
+            # 現時点では、データ取得が完了するまで待機する必要がある
             data_context = self._build_data_context(question, site_name=site_name)
             
             # データ取得完了を通知
