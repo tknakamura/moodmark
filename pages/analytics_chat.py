@@ -43,6 +43,21 @@ if "messages" not in st.session_state:
 
 # サイドバー設定
 with st.sidebar:
+    # ダッシュボードナビゲーション
+    st.markdown("### 🔗 ダッシュボード")
+    st.markdown("---")
+    
+    # 現在のページを強調表示
+    st.markdown("**📊 GA4/GSC AI分析チャット**")
+    st.markdown("（現在のページ）")
+    st.markdown("")
+    
+    # 他のダッシュボードへのリンク
+    if st.button("📄 CSV to HTML コンバーター", use_container_width=True):
+        st.switch_page("csv_to_html_dashboard.py")
+    
+    st.markdown("---")
+    
     st.header("⚙️ 設定")
     
     # モデル選択

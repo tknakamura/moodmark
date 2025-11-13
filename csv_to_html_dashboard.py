@@ -80,6 +80,12 @@ def login_page():
     
     st.markdown("---")
     st.info("💡 ユーザー情報は`config/users.json`で管理されています。")
+    
+    # マルチページへのリンク
+    st.markdown("---")
+    st.markdown("### 📊 その他のページ")
+    if st.button("📊 GA4/GSC AI分析チャット", use_container_width=True):
+        st.switch_page("pages/analytics_chat.py")
 
 class CSVToHTMLConverter:
     def __init__(self, article_cgid='S010117', ranking_cgid='J011403'):
@@ -843,6 +849,22 @@ def main():
         page_icon="📄",
         layout="wide"
     )
+    
+    # サイドバーにナビゲーションを追加
+    with st.sidebar:
+        st.markdown("### 🔗 ダッシュボード")
+        st.markdown("---")
+        
+        # 現在のページを強調表示
+        st.markdown("**📄 CSV to HTML コンバーター**")
+        st.markdown("（現在のページ）")
+        st.markdown("")
+        
+        # 他のダッシュボードへのリンク
+        if st.button("📊 GA4/GSC AI分析チャット", use_container_width=True):
+            st.switch_page("pages/analytics_chat.py")
+        
+        st.markdown("---")
     
     # 認証チェック
     if not check_authentication():
