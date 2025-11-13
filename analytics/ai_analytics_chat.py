@@ -1485,9 +1485,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 yield "[STEP] 📈 GA4データを取得中...\n"
             
             # データコンテキストを構築
-            # 注意: _build_data_contextは同期的に実行されるため、
-            # 各ステップの進捗をyieldするには、_build_data_contextを修正する必要がある
-            # 現時点では、データ取得が完了するまで待機する必要がある
+            # _build_data_contextは同期的に実行されるため、完了するまで待機
+            # 進捗表示は、_build_data_contextの呼び出し前にyieldしたメッセージで表示される
             data_context = self._build_data_context(question, site_name=site_name)
             
             # データ取得完了を通知
