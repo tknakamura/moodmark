@@ -567,7 +567,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             'トラフィック', 'セッション', 'ユーザー', 'ページビュー', 'バウンス', 
             '滞在時間', 'コンバージョン', '売上', '収益', 'アクセス', '集客',
             'オーガニック', '流入', '訪問', '来訪', '月間', '数値', 'レポート',
-            'report', 'データ', '統計', '分析', 'パフォーマンス', '実績'
+            'report', 'データ', '統計', '分析', 'パフォーマンス', '実績',
+            'ページ分析', 'ページの分析', '分析して', '分析してください'
         ]) or needs_yearly_comparison or needs_page_specific_analysis
         
         # GSCデータが必要かどうかを判定
@@ -1096,8 +1097,10 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 context_parts.append("")
         
         if needs_ga4:
+            logger.info(f"GA4データが必要と判定されました。取得を開始...")
             ga4_summary = self._get_ga4_summary(date_range, start_date, end_date)
             if "error" not in ga4_summary:
+                logger.info(f"GA4データ取得成功: セッション={ga4_summary['total_sessions']:,}, ユーザー={ga4_summary['total_users']:,}, PV={ga4_summary['total_pageviews']:,}")
                 context_parts.append("=== Google Analytics 4 (GA4) データ ===")
                 if start_date and end_date:
                     context_parts.append(f"期間: {start_date} ～ {end_date}")
@@ -1117,6 +1120,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 context_parts.append(f"❌ エラー: {error_msg}")
                 context_parts.append("GA4データが取得できませんでした。認証状態とAPI接続を確認してください。")
                 context_parts.append("")
+        else:
+            logger.info("GA4データは不要と判定されました（キーワードマッチなし、URLなし、年次比較なし）")
         
         if needs_gsc:
             gsc_summary = self._get_gsc_summary(date_range, start_date, end_date, site_name=site_name)
