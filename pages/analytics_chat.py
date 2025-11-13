@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+GA4/GSC AI分析チャットページ
+Streamlitマルチページ機能を使用
+"""
+
+import streamlit as st
+import sys
+import os
+from datetime import datetime
+from dotenv import load_dotenv
+
+# 環境変数の読み込み
+load_dotenv()
+
+# プロジェクトルートをパスに追加
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(project_root)
+
+from analytics.ai_analytics_chat import AIAnalyticsChat
+
+# ページ設定
+st.set_page_config(
+    page_title="GA4/GSC AI分析チャット",
+    page_icon="📊",
+    layout="wide"
+)
+
+# タイトル
+st.title("📊 GA4/GSC AI分析チャット")
+st.markdown("Google Analytics 4とGoogle Search ConsoleのデータをAIが分析し、質問にお答えします。")
+
+# セッション状態の初期化
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    st.session_state.ai_chat = None
+    st.session_state.model = "gpt-4o-mini"
+
+# サイドバー設定
+with st.sidebar:
+    st.header("⚙️ 設定")
+    
+    # モデル選択
+    available_models = [
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4-turbo",
+        "gpt-3.5-turbo"
+    ]
+    selected_model = st.selectbox(
+        "使用するAIモデル",
+        available_models,
+        index=0,
+        key="model_selector"
+    )
+    st.session_state.model = selected_model
+    
+    st.markdown("---")
+    
+    # 接続状態の確認
+    st.subheader("🔌 接続状態")
+    
+    # AIチャットの初期化
+    if st.session_state.ai_chat is None:
+        try:
+            with st.spinner("AIチャットを初期化中..."):
+                credentials_file = os.getenv('GOOGLE_CREDENTIALS_FILE', 'config/google-credentials-474807.json')
+                credentials_path = os.path.join(project_root, credentials_file)
+                
+                openai_api_key = os.getenv('OPENAI_API_KEY')
+                if not openai_api_key:
+                    st.error("⚠️ OpenAI APIキーが設定されていません")
+                    st.info("環境変数OPENAI_API_KEYを設定してください。")
+                else:
+                    st.session_state.ai_chat = AIAnalyticsChat(
+                        credentials_file=credentials_path,
+                        openai_api_key=openai_api_key
+                    )
+                    st.success("✅ AIチャット初期化完了")
+        except Exception as e:
+            st.error(f"❌ 初期化エラー: {str(e)}")
+            st.info("設定を確認してください。")
+    else:
+        st.success("✅ AIチャット接続済み")
+    
+    st.markdown("---")
+    
+    # チャット履歴のクリア
+    if st.button("🗑️ チャット履歴をクリア"):
+        st.session_state.messages = []
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # URL入力（SEO分析用）
+    st.subheader("🔗 ページ分析")
+    url_input = st.text_input(
+        "分析したいページのURLを入力（オプション）",
+        placeholder="https://isetan.mistore.jp/moodmark/...",
+        key="url_input"
+    )
+    if url_input:
+        st.info(f"📄 {url_input} を分析対象に含めます")
+    
+    st.markdown("---")
+    
+    # デバッグモード
+    st.subheader("🔧 デバッグ設定")
+    debug_mode = st.checkbox("デバッグモードを有効化", value=st.session_state.get('debug_mode', False), key="debug_mode_checkbox")
+    st.session_state.debug_mode = debug_mode
+    if debug_mode:
+        st.info("デバッグモードが有効です。エラー時に詳細情報が表示されます。")
+    
+    st.markdown("---")
+    
+    # 使用例
+    st.subheader("💡 使用例")
+    example_questions = [
+        "今週のトラフィックは？",
+        "SEOの改善点を教えて",
+        "人気のページは？",
+        "検索流入の状況は？",
+        "バウンス率はどう？",
+        "CTRを改善するには？"
+    ]
+    
+    for example in example_questions:
+        if st.button(f"📌 {example}", key=f"example_{example}", use_container_width=True):
+            st.session_state.user_input = example
+            st.rerun()
+    
+    # SEO分析の使用例
+    st.markdown("---")
+    st.subheader("🔍 SEO分析の使用例")
+    seo_examples = [
+        "このページのSEO改善点は？",
+        "タイトルとディスクリプションを最適化して",
+        "見出し構造を分析して",
+    ]
+    
+    for example in seo_examples:
+        if st.button(f"📌 {example}", key=f"seo_example_{example}", use_container_width=True):
+            if url_input:
+                st.session_state.user_input = f"{example} {url_input}"
+            else:
+                st.session_state.user_input = example
+            st.rerun()
+
+# メインエリア
+# チャット履歴の表示
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if "timestamp" in message:
+            st.caption(f"🕐 {message['timestamp']}")
+
+# ユーザー入力
+chat_placeholder = "GA4やGSCについて質問してください...（URLを含めるとページ分析も実行されます）"
+if prompt := st.chat_input(chat_placeholder):
+    # URLがサイドバーに入力されている場合は質問に追加
+    if 'url_input' in st.session_state and st.session_state.url_input and st.session_state.url_input.strip():
+        # サイドバーのURLを追加（既に質問に含まれていない場合）
+        import re
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+        urls_in_prompt = re.findall(url_pattern, prompt)
+        if st.session_state.url_input not in urls_in_prompt:
+            prompt_with_url = f"{prompt} {st.session_state.url_input}"
+        else:
+            prompt_with_url = prompt
+    else:
+        prompt_with_url = prompt
+    
+    # ユーザーメッセージを追加
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt_with_url if prompt_with_url != prompt else prompt,
+        "timestamp": timestamp
+    })
+    
+    # ユーザーメッセージを表示
+    with st.chat_message("user"):
+        display_prompt = prompt
+        if prompt_with_url != prompt:
+            display_prompt = f"{prompt}\n\n🔗 分析URL: {st.session_state.url_input}"
+        st.markdown(display_prompt)
+        st.caption(f"🕐 {timestamp}")
+    
+    # AI回答を生成
+    if st.session_state.ai_chat is None:
+        with st.chat_message("assistant"):
+            st.error("AIチャットが初期化されていません。サイドバーで設定を確認してください。")
+    else:
+        with st.chat_message("assistant"):
+            # URLが含まれている場合はそれを使用、そうでなければサイドバーのURLを使用
+            question = prompt_with_url if 'prompt_with_url' in locals() else prompt
+            
+            # URLが含まれている場合は分析ステップを表示
+            urls_in_question = []
+            if 'url_input' in st.session_state and st.session_state.url_input:
+                urls_in_question.append(st.session_state.url_input)
+            # 質問内のURLも抽出
+            import re
+            url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+            urls_in_question.extend(re.findall(url_pattern, question))
+            
+            if urls_in_question:
+                # SEO分析実行中のステップ表示
+                status_container = st.container()
+                with status_container:
+                    st.info("🔍 SEO分析を実行中...")
+                    progress_steps = st.empty()
+                    progress_steps.markdown("📄 ページ取得中...")
+                
+                try:
+                    answer = st.session_state.ai_chat.ask(
+                        question,
+                        model=st.session_state.model
+                    )
+                    progress_steps.empty()
+                    status_container.empty()
+                    
+                    # AI回答を表示
+                    st.markdown(answer)
+                    
+                    # メッセージ履歴に追加
+                    answer_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": answer,
+                        "timestamp": answer_timestamp
+                    })
+                    st.caption(f"🕐 {answer_timestamp}")
+                    
+                except Exception as e:
+                    progress_steps.empty()
+                    status_container.empty()
+                    
+                    import traceback
+                    error_details = traceback.format_exc()
+                    
+                    # エラーメッセージを詳細に表示
+                    error_message = f"❌ エラーが発生しました\n\n**エラー内容**: {str(e)}\n\n"
+                    
+                    # よくあるエラーの解決方法を提示
+                    if "ページの取得に失敗" in str(e) or "Connection" in str(e):
+                        error_message += "**考えられる原因**:\n"
+                        error_message += "- URLが正しくない\n"
+                        error_message += "- ページがアクセスできない（認証が必要、存在しないなど）\n"
+                        error_message += "- ネットワーク接続の問題\n\n"
+                        error_message += "**対処方法**:\n"
+                        error_message += "- URLが正しいか確認してください\n"
+                        error_message += "- ページが公開されているか確認してください\n"
+                    elif "OpenAI" in str(e) or "API" in str(e):
+                        error_message += "**考えられる原因**:\n"
+                        error_message += "- OpenAI APIキーが正しく設定されていない\n"
+                        error_message += "- APIの利用制限に達している\n\n"
+                        error_message += "**対処方法**:\n"
+                        error_message += "- 環境変数OPENAI_API_KEYを確認してください\n"
+                        error_message += "- APIの利用状況を確認してください\n"
+                    
+                    st.error(error_message)
+                    
+                    # デバッグ情報（開発環境用）
+                    if st.session_state.get('debug_mode', False):
+                        with st.expander("🔧 デバッグ情報"):
+                            st.code(error_details)
+                    
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": error_message,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
+            else:
+                # 通常の分析
+                with st.spinner("🤔 データを分析中..."):
+                    try:
+                        answer = st.session_state.ai_chat.ask(
+                            question,
+                            model=st.session_state.model
+                        )
+                        
+                        # AI回答を表示
+                        st.markdown(answer)
+                        
+                        # メッセージ履歴に追加
+                        answer_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": answer,
+                            "timestamp": answer_timestamp
+                        })
+                        st.caption(f"🕐 {answer_timestamp}")
+                        
+                    except Exception as e:
+                        import traceback
+                        error_details = traceback.format_exc()
+                        
+                        # エラーメッセージを詳細に表示
+                        error_message = f"❌ エラーが発生しました\n\n**エラー内容**: {str(e)}\n\n"
+                        
+                        # よくあるエラーの解決方法を提示
+                        if "ページの取得に失敗" in str(e) or "Connection" in str(e):
+                            error_message += "**考えられる原因**:\n"
+                            error_message += "- URLが正しくない\n"
+                            error_message += "- ページがアクセスできない（認証が必要、存在しないなど）\n"
+                            error_message += "- ネットワーク接続の問題\n\n"
+                            error_message += "**対処方法**:\n"
+                            error_message += "- URLが正しいか確認してください\n"
+                            error_message += "- ページが公開されているか確認してください\n"
+                        elif "OpenAI" in str(e) or "API" in str(e):
+                            error_message += "**考えられる原因**:\n"
+                            error_message += "- OpenAI APIキーが正しく設定されていない\n"
+                            error_message += "- APIの利用制限に達している\n\n"
+                            error_message += "**対処方法**:\n"
+                            error_message += "- 環境変数OPENAI_API_KEYを確認してください\n"
+                            error_message += "- APIの利用状況を確認してください\n"
+                        
+                        st.error(error_message)
+                        
+                        # デバッグ情報（開発環境用）
+                        if st.session_state.get('debug_mode', False):
+                            with st.expander("🔧 デバッグ情報"):
+                                st.code(error_details)
+                        
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": error_message,
+                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        })
+
+# フッター
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; color: #666;'>
+        <p>💡 ヒント: 「今週のトラフィックは？」「SEOの改善点は？」などの質問ができます</p>
+        <p>📊 データはGoogle Analytics 4とGoogle Search Consoleから取得されます</p>
+        <p>🔍 URLを含めると、ページのHTML/CSS解析とSEO分析も実行されます</p>
+        <p>📄 分析内容: タイトル、ディスクリプション、見出し構造、画像alt属性、構造化データ、リンク構造など</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
