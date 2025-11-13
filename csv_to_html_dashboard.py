@@ -12,6 +12,74 @@ import re
 from datetime import datetime
 import base64
 from io import StringIO
+import json
+import os
+import bcrypt
+
+# 認証関連の関数
+def load_users():
+    """ユーザー情報をusers.jsonから読み込み"""
+    users_file = os.path.join(os.path.dirname(__file__), 'config', 'users.json')
+    try:
+        with open(users_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('users', [])
+    except FileNotFoundError:
+        st.error("ユーザー設定ファイルが見つかりません。")
+        return []
+    except json.JSONDecodeError:
+        st.error("ユーザー設定ファイルの形式が正しくありません。")
+        return []
+
+def verify_password(password, password_hash):
+    """パスワードを検証"""
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    except Exception as e:
+        st.error(f"パスワード検証エラー: {str(e)}")
+        return False
+
+def check_authentication():
+    """ログイン状態をチェック"""
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+        st.session_state.username = None
+    return st.session_state.authenticated
+
+def login_page():
+    """ログインページを表示"""
+    st.title("🔐 ログイン")
+    st.markdown("---")
+    
+    with st.form("login_form"):
+        username = st.text_input("ユーザーID", placeholder="IDを入力してください")
+        password = st.text_input("パスワード", type="password", placeholder="パスワードを入力してください")
+        submit_button = st.form_submit_button("ログイン", type="primary")
+        
+        if submit_button:
+            if not username or not password:
+                st.error("ユーザーIDとパスワードを入力してください。")
+            else:
+                users = load_users()
+                user_found = False
+                
+                for user in users:
+                    if user['id'] == username:
+                        user_found = True
+                        if verify_password(password, user['password_hash']):
+                            st.session_state.authenticated = True
+                            st.session_state.username = username
+                            st.success("ログインに成功しました！")
+                            st.rerun()
+                        else:
+                            st.error("パスワードが正しくありません。")
+                        break
+                
+                if not user_found:
+                    st.error("ユーザーIDが存在しません。")
+    
+    st.markdown("---")
+    st.info("💡 ユーザー情報は`config/users.json`で管理されています。")
 
 class CSVToHTMLConverter:
     def __init__(self, article_cgid='S010117', ranking_cgid='J011403'):
@@ -776,6 +844,11 @@ def main():
         layout="wide"
     )
     
+    # 認証チェック
+    if not check_authentication():
+        login_page()
+        return
+    
     # Google Tag Manager - 親ウィンドウに動的に挿入
     gtm_script = """
     <script>
@@ -860,6 +933,17 @@ def main():
             file_name="MOODMARK_結婚祝いお菓子_改善案.csv",
             mime="text/csv"
         )
+        
+        st.markdown("---")
+        
+        # ログアウトボタン
+        st.header("🔐 アカウント")
+        if st.session_state.get('username'):
+            st.info(f"ログイン中: **{st.session_state.username}**")
+        if st.button("🚪 ログアウト", type="secondary"):
+            st.session_state.authenticated = False
+            st.session_state.username = None
+            st.rerun()
     
     # メインエリア
     converter = CSVToHTMLConverter(article_cgid=article_cgid, ranking_cgid=ranking_cgid)
