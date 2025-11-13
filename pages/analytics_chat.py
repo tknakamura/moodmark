@@ -24,10 +24,11 @@ sys.path.append(project_root)
 
 from analytics.ai_analytics_chat import AIAnalyticsChat
 
-# ページ設定
+# ページ設定（最初のStreamlitコマンドである必要がある）
 st.set_page_config(
     page_title="GA4/GSC AI分析チャット",
     page_icon="📊",
+    layout="wide",
     layout="wide"
 )
 
