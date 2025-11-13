@@ -90,7 +90,11 @@ class GoogleAPIsIntegration:
             logger.info("Google APIs認証完了")
             
         except Exception as e:
-            logger.error(f"認証エラー: {e}")
+            logger.error(f"認証エラー: {e}", exc_info=True)
+            # エラーの詳細をログに記録
+            if hasattr(e, 'args') and e.args:
+                logger.error(f"  エラー詳細: {e.args}")
+            logger.error(f"  認証情報の読み込みに失敗しました。環境変数を確認してください。")
     
     def check_authentication_status(self) -> Dict[str, Any]:
         """
