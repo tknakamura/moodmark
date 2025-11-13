@@ -54,7 +54,17 @@ with st.sidebar:
     
     # 他のダッシュボードへのリンク
     if st.button("📄 CSV to HTML コンバーター", use_container_width=True):
-        st.switch_page("csv_to_html_dashboard.py")
+        # Streamlitのバージョンに応じて適切な方法を使用
+        try:
+            st.switch_page("csv_to_html_dashboard.py")
+        except AttributeError:
+            # st.switch_page()が利用できない場合は、URLを直接構築
+            import urllib.parse
+            base_url = st.get_option("server.baseUrlPath") or ""
+            main_page_url = base_url.rstrip('/') or '/'
+            st.markdown(f'<meta http-equiv="refresh" content="0; url={main_page_url}">', unsafe_allow_html=True)
+            st.info(f"📄 CSV to HTML コンバーターページに移動中...")
+            st.markdown(f"[📄 CSV to HTML コンバーター]({main_page_url})")
     
     st.markdown("---")
     

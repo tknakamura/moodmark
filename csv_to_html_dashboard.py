@@ -85,7 +85,17 @@ def login_page():
     st.markdown("---")
     st.markdown("### 📊 その他のページ")
     if st.button("📊 GA4/GSC AI分析チャット", use_container_width=True, key="login_page_analytics_chat_button"):
-        st.switch_page("pages/analytics_chat.py")
+        # Streamlitのバージョンに応じて適切な方法を使用
+        try:
+            st.switch_page("pages/analytics_chat.py")
+        except AttributeError:
+            # st.switch_page()が利用できない場合は、URLを直接構築
+            import urllib.parse
+            base_url = st.get_option("server.baseUrlPath") or ""
+            analytics_chat_url = f"{base_url}analytics_chat"
+            st.markdown(f'<meta http-equiv="refresh" content="0; url={analytics_chat_url}">', unsafe_allow_html=True)
+            st.info(f"📊 GA4/GSC AI分析チャットページに移動中...")
+            st.markdown(f"[📊 GA4/GSC AI分析チャット]({analytics_chat_url})")
 
 class CSVToHTMLConverter:
     def __init__(self, article_cgid='S010117', ranking_cgid='J011403'):
@@ -862,7 +872,17 @@ def main():
         
         # 他のダッシュボードへのリンク
         if st.button("📊 GA4/GSC AI分析チャット", use_container_width=True, key="main_page_analytics_chat_button"):
-            st.switch_page("pages/analytics_chat.py")
+            # Streamlitのバージョンに応じて適切な方法を使用
+            try:
+                st.switch_page("pages/analytics_chat.py")
+            except AttributeError:
+                # st.switch_page()が利用できない場合は、URLを直接構築
+                import urllib.parse
+                base_url = st.get_option("server.baseUrlPath") or ""
+                analytics_chat_url = f"{base_url}analytics_chat"
+                st.markdown(f'<meta http-equiv="refresh" content="0; url={analytics_chat_url}">', unsafe_allow_html=True)
+                st.info(f"📊 GA4/GSC AI分析チャットページに移動中...")
+                st.markdown(f"[📊 GA4/GSC AI分析チャット]({analytics_chat_url})")
         
         st.markdown("---")
     
