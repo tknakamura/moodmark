@@ -8,7 +8,11 @@ Streamlitマルチページ機能を使用
 import streamlit as st
 import sys
 import os
+import warnings
 from datetime import datetime
+
+# importlib.metadataエラーの警告を抑制
+warnings.filterwarnings('ignore', message='.*importlib.metadata.*packages_distributions.*')
 
 # 環境変数の読み込み（オプショナル）
 try:

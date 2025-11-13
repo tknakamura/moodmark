@@ -565,7 +565,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
         else:
             return self.default_site_name
     
-    def _build_data_context(self, question: str, site_name: str = None, progress_callback=None) -> str:
+    def _build_data_context(self, question: str, site_name: str = None, progress_callback=None, timeout: int = 300) -> str:
         """
         質問に基づいてデータコンテキストを構築
         
@@ -573,12 +573,20 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             question (str): ユーザーの質問
             site_name (str): サイト名 ('moodmark' または 'moodmarkgift')、Noneの場合は自動判定またはデフォルトを使用
             progress_callback: 進捗コールバック関数（オプション）
+            timeout (int): タイムアウト時間（秒）、デフォルトは300秒（5分）
             
         Returns:
             str: データコンテキストの文字列
         """
         import time
         start_time = time.time()
+        
+        def check_timeout():
+            """タイムアウトチェック"""
+            elapsed = time.time() - start_time
+            if elapsed > timeout:
+                raise TimeoutError(f"データコンテキスト構築がタイムアウトしました（{timeout}秒）")
+            return elapsed
         
         logger.info("=" * 60)
         logger.info("データコンテキスト構築開始")
