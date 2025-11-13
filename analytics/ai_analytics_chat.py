@@ -996,9 +996,26 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                                 context_parts.append("")
                                 logger.info(f"  ステップ3: Page Speed Insightsデータ取得完了")
                             else:
-                                logger.warning(f"  Page Speed Insightsデータ取得エラー: {psi_data_mobile.get('error', 'Unknown error')}")
+                                # エラーが発生した場合でも、エラーメッセージをコンテキストに含める
+                                error_msg_mobile = psi_data_mobile.get('error', 'Unknown error')
+                                error_msg_desktop = psi_data_desktop.get('error', 'Unknown error')
+                                logger.warning(f"  Page Speed Insightsデータ取得エラー: モバイル={error_msg_mobile}, デスクトップ={error_msg_desktop}")
+                                context_parts.append("")
+                                context_parts.append("=== Page Speed Insights分析結果 ===")
+                                context_parts.append("⚠️ Page Speed Insightsデータの取得に失敗しました")
+                                context_parts.append(f"  モバイル: {error_msg_mobile}")
+                                context_parts.append(f"  デスクトップ: {error_msg_desktop}")
+                                context_parts.append("  他のデータ（GA4、GSC、SEO分析）で分析を続行します。")
+                                context_parts.append("")
                         except Exception as e:
+                            # 例外が発生した場合でも、エラーメッセージをコンテキストに含める
                             logger.warning(f"  Page Speed Insightsデータ取得エラー: {e}")
+                            context_parts.append("")
+                            context_parts.append("=== Page Speed Insights分析結果 ===")
+                            context_parts.append("⚠️ Page Speed Insightsデータの取得中にエラーが発生しました")
+                            context_parts.append(f"  エラー内容: {str(e)}")
+                            context_parts.append("  他のデータ（GA4、GSC、SEO分析）で分析を続行します。")
+                            context_parts.append("")
                         
                         # 技術的SEO
                         technical = seo_analysis.get('technical', {})
