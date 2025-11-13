@@ -556,7 +556,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         else:
             return self.default_site_name
     
-    def _build_data_context(self, question: str, site_name: str = None) -> str:
+    def _build_data_context(self, question: str, site_name: str = None, progress_callback=None) -> str:
         """
         質問に基づいてデータコンテキストを構築
         
@@ -647,6 +647,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         
         if needs_seo_analysis and urls:
             logger.info(f"SEO分析が必要と判定されました。URL数: {len(urls)}")
+            if progress_callback:
+                progress_callback("[STEP] 🔍 SEO分析を実行中...\n")
             for idx, url in enumerate(urls[:3], 1):  # 最大3つのURLまで
                 logger.info(f"[{idx}/{min(len(urls), 3)}] SEO分析を開始: {url}")
                 try:
@@ -1132,6 +1134,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         # 特定ページのGSCデータ取得
         if needs_page_specific_analysis and urls:
             logger.info(f"特定ページのGSCデータを取得中: {urls[0]}")
+            if progress_callback:
+                progress_callback("[STEP] 📊 GSCデータを取得中...\n")
             page_gsc_data = self.google_apis.get_page_specific_gsc_data(
                 page_url=urls[0],
                 date_range_days=date_range,
@@ -1178,6 +1182,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         
         if needs_ga4:
             logger.info(f"GA4データが必要と判定されました。取得を開始...")
+            if progress_callback:
+                progress_callback("[STEP] 📈 GA4データを取得中...\n")
             # URLが指定されている場合は個別ページのデータを取得
             page_url_for_ga4 = urls[0] if urls else None
             ga4_summary = self._get_ga4_summary(date_range, start_date, end_date, page_url=page_url_for_ga4)
@@ -1218,6 +1224,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             logger.info("GA4データは不要と判定されました（キーワードマッチなし、URLなし、年次比較なし）")
         
         if needs_gsc:
+            if progress_callback and not (needs_page_specific_analysis and urls):  # 特定ページのGSCデータ取得と重複しない場合のみ
+                progress_callback("[STEP] 📊 GSCデータを取得中...\n")
             gsc_summary = self._get_gsc_summary(date_range, start_date, end_date, site_name=site_name)
             if "error" not in gsc_summary:
                 context_parts.append("=== Google Search Console (GSC) データ ===")
