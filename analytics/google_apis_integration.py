@@ -761,6 +761,7 @@ class GoogleAPIsIntegration:
                     metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
                     dimensions=['pagePath', 'date']
                 )
+                logger.info(f"GA4データ取得完了（カスタム範囲）: {len(ga4_data)}行")
             else:
                 logger.info(f"GA4データを取得: 期間={date_range_days}日, ページ: {page_path}")
                 ga4_data = self.get_ga4_data(
@@ -768,6 +769,7 @@ class GoogleAPIsIntegration:
                     metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
                     dimensions=['pagePath', 'date']
                 )
+                logger.info(f"GA4データ取得完了: {len(ga4_data)}行")
             
             # ga4_dataが空の場合
             if ga4_data.empty:
