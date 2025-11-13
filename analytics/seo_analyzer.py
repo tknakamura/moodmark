@@ -81,11 +81,16 @@ class SEOAnalyzer:
                         logger.info(f"Playwrightでページ取得成功: {len(soup.find_all())} 要素")
                         return soup
                 except ImportError:
-                    logger.warning("Playwrightがインストールされていません。Seleniumを試行します")
+                    logger.debug("Playwrightがインストールされていません。Seleniumを試行します")
                     if not use_selenium:
                         return None
                 except Exception as e:
-                    logger.warning(f"Playwrightでページ取得エラー: {e}")
+                    # ブラウザインストールエラーなどの場合は、警告ログを抑制してフォールバック
+                    error_msg = str(e)
+                    if 'Executable doesn\'t exist' in error_msg or 'playwright install' in error_msg.lower():
+                        logger.debug(f"Playwrightブラウザがインストールされていません。静的HTML解析にフォールバックします")
+                    else:
+                        logger.warning(f"Playwrightでページ取得エラー: {e}")
                     if not use_selenium:
                         return None
             

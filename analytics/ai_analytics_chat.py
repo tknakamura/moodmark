@@ -918,120 +918,125 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                         context_parts.append("")
                         
                         # Page Speed Insightsデータを取得
-                        logger.info(f"  ステップ3: Page Speed Insightsデータ取得を開始...")
-                        try:
-                            psi_data_mobile = self.google_apis.get_pagespeed_insights(url, strategy='mobile')
-                            psi_data_desktop = self.google_apis.get_pagespeed_insights(url, strategy='desktop')
-                            
-                            if 'error' not in psi_data_mobile or 'error' not in psi_data_desktop:
-                                context_parts.append("")
-                                context_parts.append("=== Page Speed Insights分析結果 ===")
-                                context_parts.append("")
-                                
-                                # モバイル結果
-                                if 'error' not in psi_data_mobile:
-                                    context_parts.append("【モバイルパフォーマンス】")
-                                    lhr_mobile = psi_data_mobile.get('lighthouseResult', {})
-                                    categories_mobile = lhr_mobile.get('categories', {})
-                                    
-                                    if 'performance' in categories_mobile:
-                                        perf_score = categories_mobile['performance'].get('score', 0)
-                                        context_parts.append(f"  パフォーマンススコア: {perf_score:.0f}/100")
-                                    
-                                    if 'accessibility' in categories_mobile:
-                                        acc_score = categories_mobile['accessibility'].get('score', 0)
-                                        context_parts.append(f"  アクセシビリティスコア: {acc_score:.0f}/100")
-                                    
-                                    if 'best-practices' in categories_mobile:
-                                        bp_score = categories_mobile['best-practices'].get('score', 0)
-                                        context_parts.append(f"  ベストプラクティススコア: {bp_score:.0f}/100")
-                                    
-                                    if 'seo' in categories_mobile:
-                                        seo_score = categories_mobile['seo'].get('score', 0)
-                                        context_parts.append(f"  SEOスコア: {seo_score:.0f}/100")
-                                    
-                                    # Core Web Vitals
-                                    cwv_mobile = psi_data_mobile.get('coreWebVitals', {})
-                                    if cwv_mobile:
-                                        context_parts.append("")
-                                        context_parts.append("  【Core Web Vitals】")
-                                        if 'LCP' in cwv_mobile:
-                                            lcp = cwv_mobile['LCP']
-                                            context_parts.append(f"    LCP (Largest Contentful Paint): {lcp.get('percentile', 0):.0f}ms ({lcp.get('category', 'UNKNOWN')})")
-                                        if 'FID' in cwv_mobile:
-                                            fid = cwv_mobile['FID']
-                                            context_parts.append(f"    FID (First Input Delay): {fid.get('percentile', 0):.0f}ms ({fid.get('category', 'UNKNOWN')})")
-                                        if 'CLS' in cwv_mobile:
-                                            cls = cwv_mobile['CLS']
-                                            context_parts.append(f"    CLS (Cumulative Layout Shift): {cls.get('percentile', 0):.3f} ({cls.get('category', 'UNKNOWN')})")
-                                    
-                                    # 主要な監査項目
-                                    audits_mobile = lhr_mobile.get('audits', {})
-                                    if audits_mobile:
-                                        context_parts.append("")
-                                        context_parts.append("  【主要なパフォーマンス指標】")
-                                        if 'first-contentful-paint' in audits_mobile:
-                                            fcp = audits_mobile['first-contentful-paint']
-                                            context_parts.append(f"    FCP (First Contentful Paint): {fcp.get('displayValue', 'N/A')}")
-                                        if 'largest-contentful-paint' in audits_mobile:
-                                            lcp_audit = audits_mobile['largest-contentful-paint']
-                                            context_parts.append(f"    LCP (Largest Contentful Paint): {lcp_audit.get('displayValue', 'N/A')}")
-                                        if 'total-blocking-time' in audits_mobile:
-                                            tbt = audits_mobile['total-blocking-time']
-                                            context_parts.append(f"    TBT (Total Blocking Time): {tbt.get('displayValue', 'N/A')}")
-                                        if 'cumulative-layout-shift' in audits_mobile:
-                                            cls_audit = audits_mobile['cumulative-layout-shift']
-                                            context_parts.append(f"    CLS (Cumulative Layout Shift): {cls_audit.get('displayValue', 'N/A')}")
-                                        if 'speed-index' in audits_mobile:
-                                            si = audits_mobile['speed-index']
-                                            context_parts.append(f"    Speed Index: {si.get('displayValue', 'N/A')}")
-                                
-                                # デスクトップ結果
-                                if 'error' not in psi_data_desktop:
-                                    context_parts.append("")
-                                    context_parts.append("【デスクトップパフォーマンス】")
-                                    lhr_desktop = psi_data_desktop.get('lighthouseResult', {})
-                                    categories_desktop = lhr_desktop.get('categories', {})
-                                    
-                                    if 'performance' in categories_desktop:
-                                        perf_score = categories_desktop['performance'].get('score', 0)
-                                        context_parts.append(f"  パフォーマンススコア: {perf_score:.0f}/100")
-                                    
-                                    if 'accessibility' in categories_desktop:
-                                        acc_score = categories_desktop['accessibility'].get('score', 0)
-                                        context_parts.append(f"  アクセシビリティスコア: {acc_score:.0f}/100")
-                                    
-                                    if 'best-practices' in categories_desktop:
-                                        bp_score = categories_desktop['best-practices'].get('score', 0)
-                                        context_parts.append(f"  ベストプラクティススコア: {bp_score:.0f}/100")
-                                    
-                                    if 'seo' in categories_desktop:
-                                        seo_score = categories_desktop['seo'].get('score', 0)
-                                        context_parts.append(f"  SEOスコア: {seo_score:.0f}/100")
-                                
-                                context_parts.append("")
-                                logger.info(f"  ステップ3: Page Speed Insightsデータ取得完了")
-                            else:
-                                # エラーが発生した場合でも、エラーメッセージをコンテキストに含める
-                                error_msg_mobile = psi_data_mobile.get('error', 'Unknown error')
-                                error_msg_desktop = psi_data_desktop.get('error', 'Unknown error')
-                                logger.warning(f"  Page Speed Insightsデータ取得エラー: モバイル={error_msg_mobile}, デスクトップ={error_msg_desktop}")
-                                context_parts.append("")
-                                context_parts.append("=== Page Speed Insights分析結果 ===")
-                                context_parts.append("⚠️ Page Speed Insightsデータの取得に失敗しました")
-                                context_parts.append(f"  モバイル: {error_msg_mobile}")
-                                context_parts.append(f"  デスクトップ: {error_msg_desktop}")
-                                context_parts.append("  他のデータ（GA4、GSC、SEO分析）で分析を続行します。")
-                                context_parts.append("")
-                        except Exception as e:
-                            # 例外が発生した場合でも、エラーメッセージをコンテキストに含める
-                            logger.warning(f"  Page Speed Insightsデータ取得エラー: {e}")
-                            context_parts.append("")
-                            context_parts.append("=== Page Speed Insights分析結果 ===")
-                            context_parts.append("⚠️ Page Speed Insightsデータの取得中にエラーが発生しました")
-                            context_parts.append(f"  エラー内容: {str(e)}")
-                            context_parts.append("  他のデータ（GA4、GSC、SEO分析）で分析を続行します。")
-                            context_parts.append("")
+                        # 注意: 処理時間が長いため（モバイル+デスクトップで約90秒）、無効化しています
+                        # 必要に応じて、以下のコメントを外して有効化できます
+                        # logger.info(f"  ステップ3: Page Speed Insightsデータ取得を開始...")
+                        # try:
+                        #     psi_data_mobile = self.google_apis.get_pagespeed_insights(url, strategy='mobile')
+                        #     psi_data_desktop = self.google_apis.get_pagespeed_insights(url, strategy='desktop')
+                        #     
+                        #     if 'error' not in psi_data_mobile or 'error' not in psi_data_desktop:
+                        #         context_parts.append("")
+                        #         context_parts.append("=== Page Speed Insights分析結果 ===")
+                        #         context_parts.append("")
+                        #         
+                        #         # モバイル結果
+                        #         if 'error' not in psi_data_mobile:
+                        #             context_parts.append("【モバイルパフォーマンス】")
+                        #             lhr_mobile = psi_data_mobile.get('lighthouseResult', {})
+                        #             categories_mobile = lhr_mobile.get('categories', {})
+                        #             
+                        #             if 'performance' in categories_mobile:
+                        #                 perf_score = categories_mobile['performance'].get('score', 0)
+                        #                 context_parts.append(f"  パフォーマンススコア: {perf_score:.0f}/100")
+                        #             
+                        #             if 'accessibility' in categories_mobile:
+                        #                 acc_score = categories_mobile['accessibility'].get('score', 0)
+                        #                 context_parts.append(f"  アクセシビリティスコア: {acc_score:.0f}/100")
+                        #             
+                        #             if 'best-practices' in categories_mobile:
+                        #                 bp_score = categories_mobile['best-practices'].get('score', 0)
+                        #                 context_parts.append(f"  ベストプラクティススコア: {bp_score:.0f}/100")
+                        #             
+                        #             if 'seo' in categories_mobile:
+                        #                 seo_score = categories_mobile['seo'].get('score', 0)
+                        #                 context_parts.append(f"  SEOスコア: {seo_score:.0f}/100")
+                        #             
+                        #             # Core Web Vitals
+                        #             cwv_mobile = psi_data_mobile.get('coreWebVitals', {})
+                        #             if cwv_mobile:
+                        #                 context_parts.append("")
+                        #                 context_parts.append("  【Core Web Vitals】")
+                        #                 if 'LCP' in cwv_mobile:
+                        #                     lcp = cwv_mobile['LCP']
+                        #                     context_parts.append(f"    LCP (Largest Contentful Paint): {lcp.get('percentile', 0):.0f}ms ({lcp.get('category', 'UNKNOWN')})")
+                        #                 if 'FID' in cwv_mobile:
+                        #                     fid = cwv_mobile['FID']
+                        #                     context_parts.append(f"    FID (First Input Delay): {fid.get('percentile', 0):.0f}ms ({fid.get('category', 'UNKNOWN')})")
+                        #                 if 'CLS' in cwv_mobile:
+                        #                     cls = cwv_mobile['CLS']
+                        #                     context_parts.append(f"    CLS (Cumulative Layout Shift): {cls.get('percentile', 0):.3f} ({cls.get('category', 'UNKNOWN')})")
+                        #             
+                        #             # 主要な監査項目
+                        #             audits_mobile = lhr_mobile.get('audits', {})
+                        #             if audits_mobile:
+                        #                 context_parts.append("")
+                        #                 context_parts.append("  【主要なパフォーマンス指標】")
+                        #                 if 'first-contentful-paint' in audits_mobile:
+                        #                     fcp = audits_mobile['first-contentful-paint']
+                        #                     context_parts.append(f"    FCP (First Contentful Paint): {fcp.get('displayValue', 'N/A')}")
+                        #                 if 'largest-contentful-paint' in audits_mobile:
+                        #                     lcp_audit = audits_mobile['largest-contentful-paint']
+                        #                     context_parts.append(f"    LCP (Largest Contentful Paint): {lcp_audit.get('displayValue', 'N/A')}")
+                        #                 if 'total-blocking-time' in audits_mobile:
+                        #                     tbt = audits_mobile['total-blocking-time']
+                        #                     context_parts.append(f"    TBT (Total Blocking Time): {tbt.get('displayValue', 'N/A')}")
+                        #                 if 'cumulative-layout-shift' in audits_mobile:
+                        #                     cls_audit = audits_mobile['cumulative-layout-shift']
+                        #                     context_parts.append(f"    CLS (Cumulative Layout Shift): {cls_audit.get('displayValue', 'N/A')}")
+                        #                 if 'speed-index' in audits_mobile:
+                        #                     si = audits_mobile['speed-index']
+                        #                     context_parts.append(f"    Speed Index: {si.get('displayValue', 'N/A')}")
+                        #         
+                        #         # デスクトップ結果
+                        #         if 'error' not in psi_data_desktop:
+                        #             context_parts.append("")
+                        #             context_parts.append("【デスクトップパフォーマンス】")
+                        #             lhr_desktop = psi_data_desktop.get('lighthouseResult', {})
+                        #             categories_desktop = lhr_desktop.get('categories', {})
+                        #             
+                        #             if 'performance' in categories_desktop:
+                        #                 perf_score = categories_desktop['performance'].get('score', 0)
+                        #                 context_parts.append(f"  パフォーマンススコア: {perf_score:.0f}/100")
+                        #             
+                        #             if 'accessibility' in categories_desktop:
+                        #                 acc_score = categories_desktop['accessibility'].get('score', 0)
+                        #                 context_parts.append(f"  アクセシビリティスコア: {acc_score:.0f}/100")
+                        #             
+                        #             if 'best-practices' in categories_desktop:
+                        #                 bp_score = categories_desktop['best-practices'].get('score', 0)
+                        #                 context_parts.append(f"  ベストプラクティススコア: {bp_score:.0f}/100")
+                        #             
+                        #             if 'seo' in categories_desktop:
+                        #                 seo_score = categories_desktop['seo'].get('score', 0)
+                        #                 context_parts.append(f"  SEOスコア: {seo_score:.0f}/100")
+                        #         
+                        #         context_parts.append("")
+                        #         logger.info(f"  ステップ3: Page Speed Insightsデータ取得完了")
+                        #     else:
+                        #         # エラーが発生した場合でも、エラーメッセージをコンテキストに含める
+                        #         error_msg_mobile = psi_data_mobile.get('error', 'Unknown error')
+                        #         error_msg_desktop = psi_data_desktop.get('error', 'Unknown error')
+                        #         logger.warning(f"  Page Speed Insightsデータ取得エラー: モバイル={error_msg_mobile}, デスクトップ={error_msg_desktop}")
+                        #         context_parts.append("")
+                        #         context_parts.append("=== Page Speed Insights分析結果 ===")
+                        #         context_parts.append("⚠️ Page Speed Insightsデータの取得に失敗しました")
+                        #         context_parts.append(f"  モバイル: {error_msg_mobile}")
+                        #         context_parts.append(f"  デスクトップ: {error_msg_desktop}")
+                        #         context_parts.append("  他のデータ（GA4、GSC、SEO分析）で分析を続行します。")
+                        #         context_parts.append("")
+                        # except Exception as e:
+                        #     # 例外が発生した場合でも、エラーメッセージをコンテキストに含める
+                        #     logger.warning(f"  Page Speed Insightsデータ取得エラー: {e}")
+                        #     context_parts.append("")
+                        #     context_parts.append("=== Page Speed Insights分析結果 ===")
+                        #     context_parts.append("⚠️ Page Speed Insightsデータの取得中にエラーが発生しました")
+                        #     context_parts.append(f"  エラー内容: {str(e)}")
+                        #     context_parts.append("  他のデータ（GA4、GSC、SEO分析）で分析を続行します。")
+                        #     context_parts.append("")
+                        
+                        # Page Speed Insightsは無効化されています（処理時間短縮のため）
+                        logger.info(f"  ステップ3: Page Speed Insightsデータ取得をスキップ（処理時間短縮のため無効化）")
                         
                         # 技術的SEO
                         technical = seo_analysis.get('technical', {})
