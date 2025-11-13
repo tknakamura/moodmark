@@ -13,3 +13,5 @@ streamlit run csv_to_html_dashboard.py \
   --server.headless=true \
   --server.enableCORS=false \
   --server.enableXsrfProtection=false
+
+

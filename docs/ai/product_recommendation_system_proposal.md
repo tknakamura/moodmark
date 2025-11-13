@@ -315,3 +315,13 @@ MOO:D MARK IDEAの記事に最適な商品を提案するAI推奨システムの
 - [システム仕様書](./product_recommendation_system_specifications.md)
 - [API仕様書](./product_recommendation_api_specifications.md)
 - [テスト結果レポート](./test_results_report.md)
+
+
+
+
+
+
+
+
+
+

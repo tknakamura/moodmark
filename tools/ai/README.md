@@ -54,3 +54,13 @@ curl "http://localhost:5000/api/v1/recommendations/article_001?limit=10"
 ## ライセンス
 
 このプロジェクトはMOO:D MARK IDEAプロジェクトの一部です。
+
+
+
+
+
+
+
+
+
+

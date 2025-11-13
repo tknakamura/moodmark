@@ -465,3 +465,13 @@ if __name__ == "__main__":
     for rec in recommendations:
         print(f"- {rec.product_name} (スコア: {rec.match_score:.3f}, 信頼度: {rec.confidence:.3f})")
         print(f"  理由: {', '.join(rec.match_reasons)}")
+
+
+
+
+
+
+
+
+
+

@@ -15,3 +15,5 @@ echo "ブラウザで http://localhost:8501 にアクセスしてください"
 echo ""
 
 streamlit run csv_to_html_dashboard.py
+
+

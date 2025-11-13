@@ -1,0 +1,106 @@
+{
+  "notion": {
+    "integration_token": "",
+    "database_id": "",
+    "page_id": "",
+    "workspace_name": "MOO-D MARK Analytics"
+  },
+  "report_settings": {
+    "auto_sync_enabled": true,
+    "sync_frequency": "daily",
+    "report_types": [
+      "weekly_analysis",
+      "kpi_dashboard",
+      "recommendations"
+    ],
+    "include_charts": true,
+    "include_raw_data": false
+  },
+  "database_schema": {
+    "analytics_reports": {
+      "properties": {
+        "Title": {
+          "type": "title"
+        },
+        "Report Date": {
+          "type": "date"
+        },
+        "Period": {
+          "type": "rich_text"
+        },
+        "Total Sessions": {
+          "type": "number"
+        },
+        "Total Users": {
+          "type": "number"
+        },
+        "Total Revenue (¥)": {
+          "type": "number"
+        },
+        "CVR (%)": {
+          "type": "number"
+        },
+        "AOV (¥)": {
+          "type": "number"
+        },
+        "Status": {
+          "type": "select",
+          "options": [
+            {"name": "Generated", "color": "blue"},
+            {"name": "Reviewed", "color": "yellow"},
+            {"name": "Actioned", "color": "green"}
+          ]
+        },
+        "Priority": {
+          "type": "select",
+          "options": [
+            {"name": "High", "color": "red"},
+            {"name": "Medium", "color": "yellow"},
+            {"name": "Low", "color": "gray"}
+          ]
+        },
+        "Tags": {
+          "type": "multi_select",
+          "options": [
+            {"name": "Weekly Report", "color": "blue"},
+            {"name": "Performance", "color": "green"},
+            {"name": "SEO", "color": "purple"},
+            {"name": "Mobile", "color": "orange"},
+            {"name": "Desktop", "color": "gray"}
+          ]
+        }
+      }
+    }
+  },
+  "templates": {
+    "weekly_report_template": {
+      "title_format": "📊 {site_name} 週次分析レポート - {date_range}",
+      "sections": [
+        "Executive Summary",
+        "Key Metrics",
+        "Device Analysis", 
+        "Channel Performance",
+        "Recommendations",
+        "Next Actions"
+      ]
+    },
+    "kpi_dashboard_template": {
+      "title_format": "📈 KPIダッシュボード - {date}",
+      "metrics": [
+        "Total Sessions",
+        "Total Users", 
+        "Total Revenue",
+        "CVR",
+        "AOV",
+        "Bounce Rate"
+      ]
+    }
+  },
+  "formatting": {
+    "currency_symbol": "¥",
+    "percentage_decimal_places": 2,
+    "number_format": "japanese",
+    "date_format": "YYYY年MM月DD日",
+    "timezone": "Asia/Tokyo"
+  }
+}

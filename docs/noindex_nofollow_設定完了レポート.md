@@ -160,3 +160,5 @@ Streamlitアプリは静的ファイル（`robots.txt`）の配信に制限が�
 
 **developed by Takeshi Nakamura**
 
+
+

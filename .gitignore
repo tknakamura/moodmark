@@ -63,8 +63,13 @@ data/processed/
 
 # Google credentials
 google-credentials.json
+google-credentials-*.json
 credentials.json
 token.json
+oauth_credentials.json
+config/oauth_credentials.json
+config/token.json
+config/google-credentials-*.json
 
 # Temporary files
 tmp/

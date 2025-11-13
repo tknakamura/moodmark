@@ -494,3 +494,13 @@ if __name__ == "__main__":
     
     print("処理結果:")
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+
+
+
+
+
+
+
+

@@ -12,10 +12,21 @@ import json
 import schedule
 import time
 from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
 import pandas as pd
 import logging
-from google_apis_integration import GoogleAPIsIntegration
-from looker_studio_connector import LookerStudioConnector
+
+# 相対インポートまたは絶対インポートを試みる
+try:
+    from .google_apis_integration import GoogleAPIsIntegration
+    from .looker_studio_connector import LookerStudioConnector
+    from .notion_integration import NotionIntegration
+    from .notion_report_converter import NotionReportConverter
+except ImportError:
+    from google_apis_integration import GoogleAPIsIntegration
+    from looker_studio_connector import LookerStudioConnector
+    from notion_integration import NotionIntegration
+    from notion_report_converter import NotionReportConverter
 
 # ログ設定
 logging.basicConfig(
@@ -33,10 +44,15 @@ class IntegratedAnalyticsSystem:
         """統合分析システムの初期化"""
         self.api_integration = GoogleAPIsIntegration()
         self.looker_connector = LookerStudioConnector()
+        self.notion_integration = None
+        self.notion_converter = None
         self.is_running = False
         
         # 設定の読み込み
         self.config = self._load_config()
+        
+        # Notion統合の初期化
+        self._initialize_notion_integration()
         
         # ログディレクトリの作成
         os.makedirs('logs', exist_ok=True)
@@ -65,6 +81,12 @@ class IntegratedAnalyticsSystem:
                     'ctr': 0.02
                 },
                 'email_notifications': False
+            },
+            'notion': {
+                'enabled': True,
+                'auto_sync': True,
+                'sync_after_report_generation': True,
+                'create_database_if_missing': True
             }
         }
         
@@ -86,6 +108,36 @@ class IntegratedAnalyticsSystem:
         except Exception as e:
             logger.error(f"設定読み込みエラー: {e}")
             return default_config
+    
+    def _initialize_notion_integration(self):
+        """Notion統合の初期化"""
+        try:
+            if not self.config.get('notion', {}).get('enabled', False):
+                logger.info("Notion統合が無効です")
+                return
+            
+            # Notion統合クラスの初期化
+            self.notion_integration = NotionIntegration()
+            self.notion_converter = NotionReportConverter()
+            
+            if self.notion_integration.client:
+                logger.info("Notion統合が正常に初期化されました")
+                
+                # データベースの確認・作成
+                if (self.config.get('notion', {}).get('create_database_if_missing', False) and
+                    not self.notion_integration.database_id):
+                    
+                    database_id = self.notion_integration.create_analytics_database()
+                    if database_id:
+                        logger.info(f"新しいAnalyticsデータベースを作成しました: {database_id}")
+            else:
+                logger.warning("Notion認証に失敗しました。Notion連携は無効です。")
+                self.notion_integration = None
+                
+        except Exception as e:
+            logger.error(f"Notion統合初期化エラー: {e}")
+            self.notion_integration = None
+            self.notion_converter = None
     
     def collect_data(self):
         """データ収集の実行"""
@@ -169,6 +221,16 @@ class IntegratedAnalyticsSystem:
                 json.dump(report, f, ensure_ascii=False, indent=2)
             
             logger.info(f"分析レポート生成完了: {report_file}")
+            
+            # Notionに送信（設定が有効な場合）
+            if (self.notion_integration and 
+                self.config.get('notion', {}).get('sync_after_report_generation', False)):
+                
+                notion_page_id = self._sync_report_to_notion(report_file, report)
+                if notion_page_id:
+                    report['notion_page_id'] = notion_page_id
+                    logger.info(f"レポートをNotionに送信しました: {notion_page_id}")
+            
             return report
             
         except Exception as e:
@@ -390,6 +452,166 @@ class IntegratedAnalyticsSystem:
             
         except Exception as e:
             logger.error(f"アラートチェックエラー: {e}")
+    
+    def _sync_report_to_notion(self, report_file: str, report_data: Dict[str, Any]) -> Optional[str]:
+        """レポートをNotionに送信"""
+        try:
+            if not self.notion_integration or not self.notion_converter:
+                logger.error("Notion統合が初期化されていません")
+                return None
+            
+            logger.info("レポートのNotion送信開始")
+            
+            # 対応するMarkdownファイルを探す
+            markdown_file = self._find_corresponding_markdown(report_file)
+            
+            # レポートをNotion形式に変換
+            converted_report = self.notion_converter.convert_analysis_report(
+                report_file, 
+                markdown_file
+            )
+            
+            if not converted_report:
+                logger.error("レポート変換に失敗しました")
+                return None
+            
+            # Markdownコンテンツの取得
+            markdown_content = ""
+            if markdown_file:
+                with open(markdown_file, 'r', encoding='utf-8') as f:
+                    markdown_content = f.read()
+            
+            # NotionページでのReporting
+            page_id = self.notion_integration.create_report_page(
+                converted_report, 
+                markdown_content
+            )
+            
+            if page_id:
+                logger.info(f"Notionレポートページ作成成功: {page_id}")
+                return page_id
+            else:
+                logger.error("Notionページ作成に失敗しました")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Notion送信エラー: {e}")
+            return None
+    
+    def _find_corresponding_markdown(self, json_file_path: str) -> Optional[str]:
+        """対応するMarkdownファイルを探す"""
+        try:
+            # JSONファイル名から対応するMarkdownファイルを推測
+            base_name = os.path.basename(json_file_path)
+            
+            # 一般的なMarkdownファイルの場所を検索
+            markdown_locations = [
+                'docs/analytics/',
+                'data/processed/',
+                os.path.dirname(json_file_path) + '/'
+            ]
+            
+            # パターンマッチング用のキーワード
+            if 'purchase' in base_name:
+                keywords = ['purchase', 'moodmark', '7days', 'analysis']
+            else:
+                keywords = ['moodmark', '7days', 'analysis']
+            
+            # 各場所でMarkdownファイルを検索
+            for location in markdown_locations:
+                if os.path.exists(location):
+                    for filename in os.listdir(location):
+                        if filename.endswith('.md'):
+                            # キーワードマッチング
+                            matches = sum(1 for keyword in keywords if keyword in filename.lower())
+                            if matches >= 2:  # 最低2つのキーワードがマッチした場合
+                                markdown_path = os.path.join(location, filename)
+                                logger.info(f"対応するMarkdownファイルを発見: {markdown_path}")
+                                return markdown_path
+            
+            # 直接的なファイル名パターンもチェック
+            markdown_patterns = [
+                'docs/analytics/moodmark_7days_analysis_report.md',
+                'docs/analytics/analysis_report.md',
+                'data/processed/report.md'
+            ]
+            
+            for pattern in markdown_patterns:
+                if os.path.exists(pattern):
+                    logger.info(f"標準Markdownファイルを使用: {pattern}")
+                    return pattern
+            
+            logger.warning("対応するMarkdownファイルが見つかりません")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Markdownファイル検索エラー: {e}")
+            return None
+    
+    def create_notion_kpi_dashboard(self) -> Optional[str]:
+        """Notion KPIダッシュボードの作成"""
+        try:
+            if not self.notion_integration:
+                logger.error("Notion統合が初期化されていません")
+                return None
+            
+            logger.info("Notion KPIダッシュボード作成開始")
+            
+            # 最新の分析データを取得
+            data = self.collect_data()
+            if not data:
+                logger.error("データ収集に失敗しました")
+                return None
+            
+            # KPIダッシュボード用のレポート生成
+            kpi_report = self._generate_kpi_report(data)
+            
+            # Notionページの作成
+            dashboard_page_id = self.notion_integration.create_report_page(
+                kpi_report,
+                self._format_kpi_dashboard_content(kpi_report)
+            )
+            
+            if dashboard_page_id:
+                logger.info(f"KPIダッシュボード作成完了: {dashboard_page_id}")
+                return dashboard_page_id
+            else:
+                logger.error("KPIダッシュボード作成に失敗しました")
+                return None
+                
+        except Exception as e:
+            logger.error(f"KPIダッシュボード作成エラー: {e}")
+            return None
+    
+    def _generate_kpi_report(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """KPI用レポートの生成"""
+        return {
+            'report_date': datetime.now().isoformat(),
+            'period': 'KPI Dashboard',
+            'site_url': 'https://isetan.mistore.jp/moodmark',
+            'summary': data.get('ga4_data', pd.DataFrame()).to_dict('records')[0] if not data.get('ga4_data', pd.DataFrame()).empty else {},
+            'recommendations': ['KPIダッシュボードの定期的な監視を推奨します。']
+        }
+    
+    def _format_kpi_dashboard_content(self, kpi_report: Dict[str, Any]) -> str:
+        """KPIダッシュボードのコンテンツ整形"""
+        content = f"""
+# 📈 MOO-D MARK KPIダッシュボード
+
+**更新日時**: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}
+
+## 主要指標
+
+このダッシュボードは自動更新されます。最新のパフォーマンスデータを確認できます。
+
+## 注意事項
+
+- データは毎日自動更新されます
+- 異常値を発見した場合は、詳細な分析レポートを確認してください
+- 改善提案については、レコメンデーションセクションを参照してください
+        """
+        
+        return content.strip()
     
     def start_scheduled_analysis(self):
         """スケジュール分析の開始"""

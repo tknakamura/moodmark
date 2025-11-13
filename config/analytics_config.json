@@ -21,17 +21,21 @@
   "sites": {
     "moodmark_idea": {
       "url": "https://isetan.mistore.jp/moodmarkgift/",
-      "ga4_property_id": "your-ga4-property-id-for-idea",
+      "ga4_property_id": "316302380",
       "gsc_site_url": "https://isetan.mistore.jp/moodmarkgift/"
     },
     "moodmark": {
       "url": "https://isetan.mistore.jp/moodmark/",
-      "ga4_property_id": "your-ga4-property-id-for-main",
+      "ga4_property_id": "316302380",
       "gsc_site_url": "https://isetan.mistore.jp/moodmark/"
     }
   },
   "looker_studio": {
     "dashboard_folder_id": "your-dashboard-folder-id",
     "data_source_folder_id": "your-data-source-folder-id"
+  },
+  "oauth": {
+    "credentials_file": "config/oauth_credentials.json",
+    "token_file": "config/token.json"
   }
 }

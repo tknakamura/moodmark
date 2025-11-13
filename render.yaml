@@ -18,5 +18,14 @@ services:
         value: false
       - key: STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION
         value: false
+      # 注意: 以下の環境変数はRender.comダッシュボードで設定してください
+      # - key: OPENAI_API_KEY
+      #   value: your_openai_api_key_here
+      # - key: GOOGLE_CREDENTIALS_FILE
+      #   value: config/google-credentials-474807.json
+      # - key: GA4_PROPERTY_ID
+      #   value: 316302380
+      # - key: GSC_SITE_URL
+      #   value: https://isetan.mistore.jp/moodmark/
 
 

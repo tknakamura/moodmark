@@ -651,3 +651,13 @@ if __name__ == "__main__":
         print(f"テスト完了: {report_file}")
     else:
         print("エンジンの初期化に失敗しました")
+
+
+
+
+
+
+
+
+
+
