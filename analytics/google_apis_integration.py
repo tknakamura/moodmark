@@ -1271,8 +1271,8 @@ class GoogleAPIsIntegration:
         if not ga4_data.empty:
             summary['ga4_summary'] = {
                 'total_sessions': ga4_data['sessions'].sum() if 'sessions' in ga4_data.columns else 0,
-                'total_users': ga4_data['users'].sum() if 'users' in ga4_data.columns else 0,
-                'total_pageviews': ga4_data['pageviews'].sum() if 'pageviews' in ga4_data.columns else 0,
+                'total_users': ga4_data['activeUsers'].sum() if 'activeUsers' in ga4_data.columns else 0,  # GA4 APIでは 'activeUsers' を使用
+                'total_pageviews': ga4_data['screenPageViews'].sum() if 'screenPageViews' in ga4_data.columns else 0,  # GA4 APIでは 'screenPageViews' を使用
                 'avg_bounce_rate': ga4_data['bounceRate'].mean() if 'bounceRate' in ga4_data.columns else 0,
                 'avg_session_duration': ga4_data['averageSessionDuration'].mean() if 'averageSessionDuration' in ga4_data.columns else 0,
                 'total_conversions': ga4_data['conversions'].sum() if 'conversions' in ga4_data.columns else 0,
