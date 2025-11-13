@@ -1,3 +1,16 @@
 streamlit==1.28.1
 pandas==2.1.3
 numpy==1.24.3
+bcrypt>=4.0.0
+
+# Google APIs
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
+
+# Analytics
+schedule==1.2.0
+
+# Notion Integration
+notion-client==2.2.1
