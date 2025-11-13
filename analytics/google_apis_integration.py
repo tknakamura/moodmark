@@ -63,6 +63,28 @@ class GoogleAPIsIntegration:
                 except Exception as e:
                     logger.error(f"環境変数からの認証情報読み込みエラー: {e}")
                     return
+            # 方法1.5: GOOGLE_CREDENTIALS_FILEにJSONが設定されている場合のフォールバック
+            elif self.credentials_file and self.credentials_file.strip().startswith('{'):
+                # GOOGLE_CREDENTIALS_FILEにJSONが設定されている場合
+                logger.warning("GOOGLE_CREDENTIALS_FILEにJSONが設定されています。GOOGLE_CREDENTIALS_JSON環境変数の使用を推奨します。")
+                try:
+                    credentials_info = json.loads(self.credentials_file)
+                    self.credentials = service_account.Credentials.from_service_account_info(
+                        credentials_info,
+                        scopes=[
+                            'https://www.googleapis.com/auth/analytics.readonly',
+                            'https://www.googleapis.com/auth/webmasters.readonly',
+                            'https://www.googleapis.com/auth/drive',
+                            'https://www.googleapis.com/auth/bigquery'
+                        ]
+                    )
+                    logger.info("GOOGLE_CREDENTIALS_FILEからJSON形式の認証情報を読み込みました（フォールバック）")
+                except json.JSONDecodeError as e:
+                    logger.error(f"GOOGLE_CREDENTIALS_FILEのJSON解析エラー: {e}")
+                    return
+                except Exception as e:
+                    logger.error(f"GOOGLE_CREDENTIALS_FILEからの認証情報読み込みエラー: {e}")
+                    return
             # 方法2: 認証ファイルパスから読み込む
             elif self.credentials_file and os.path.exists(self.credentials_file):
                 self.credentials = service_account.Credentials.from_service_account_file(
