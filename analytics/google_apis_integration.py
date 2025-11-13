@@ -122,6 +122,12 @@ class GoogleAPIsIntegration:
         status['diagnostics']['GOOGLE_CREDENTIALS_JSON_set'] = bool(google_credentials_json)
         status['diagnostics']['GOOGLE_CREDENTIALS_FILE_set'] = bool(google_credentials_file)
         
+        # GOOGLE_CREDENTIALS_FILEにJSONが設定されている場合の検出
+        if google_credentials_file and google_credentials_file.strip().startswith('{'):
+            status['errors'].append('GOOGLE_CREDENTIALS_FILEにJSONの内容が設定されています。GOOGLE_CREDENTIALS_JSON環境変数を使用してください。')
+            status['diagnostics']['credentials_file_contains_json'] = True
+            status['diagnostics']['suggested_fix'] = 'GOOGLE_CREDENTIALS_FILEの値をGOOGLE_CREDENTIALS_JSON環境変数に移動してください'
+        
         # 認証情報の確認
         if self.credentials:
             status['credentials_loaded'] = True

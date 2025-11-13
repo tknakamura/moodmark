@@ -148,7 +148,20 @@ with st.sidebar:
                             st.error("JSON形式が不正です。正しいJSON形式であることを確認してください。")
                     elif diagnostics.get('credentials_type') == 'GOOGLE_CREDENTIALS_FILE':
                         st.info("💡 `GOOGLE_CREDENTIALS_FILE`環境変数が設定されています。")
-                        if not diagnostics.get('file_exists', False):
+                        
+                        # GOOGLE_CREDENTIALS_FILEにJSONが設定されている場合
+                        if diagnostics.get('credentials_file_contains_json', False):
+                            st.error("⚠️ **問題**: `GOOGLE_CREDENTIALS_FILE`にJSONの内容が設定されています。")
+                            st.warning("""
+                            **正しい設定方法:**
+                            
+                            1. Render.comの環境変数から`GOOGLE_CREDENTIALS_FILE`を削除
+                            2. 新しい環境変数を追加:
+                               - **Key**: `GOOGLE_CREDENTIALS_JSON`
+                               - **Value**: `GOOGLE_CREDENTIALS_FILE`に設定されていたJSONの内容をそのまま貼り付け
+                            3. デプロイを再実行
+                            """)
+                        elif not diagnostics.get('file_exists', False):
                             st.error(f"ファイルが見つかりません: {os.getenv('GOOGLE_CREDENTIALS_FILE')}")
                             st.info("Render.comでファイルをアップロードするか、`GOOGLE_CREDENTIALS_JSON`環境変数を使用してください。")
                     else:
