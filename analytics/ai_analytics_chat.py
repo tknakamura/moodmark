@@ -1242,6 +1242,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
         if needs_ga4:
             import time
             step_start_time = time.time()
+            check_timeout()  # タイムアウトチェック
             logger.info(f"GA4データが必要と判定されました。取得を開始...")
             if progress_callback:
                 progress_callback("[STEP] 📈 GA4データを取得中...\n")
@@ -1294,6 +1295,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
         if needs_gsc:
             import time
             step_start_time = time.time()
+            check_timeout()  # タイムアウトチェック
             if progress_callback and not (needs_page_specific_analysis and urls):  # 特定ページのGSCデータ取得と重複しない場合のみ
                 progress_callback("[STEP] 📊 GSCデータを取得中...\n")
             gsc_summary = self._get_gsc_summary(date_range, start_date, end_date, site_name=site_name)
