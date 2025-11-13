@@ -607,7 +607,24 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 date_range_days=date_range
             )
             
-            if 'error' not in yearly_comparison:
+            if 'error' in yearly_comparison:
+                error_msg = yearly_comparison.get('error', 'Unknown error')
+                logger.error(f"年次比較データ取得エラー: {error_msg}")
+                context_parts.append("=== 年次比較データ（GSC） ===")
+                context_parts.append("")
+                context_parts.append(f"❌ エラー: {error_msg}")
+                context_parts.append("")
+                context_parts.append("【対処方法】")
+                context_parts.append("1. Render.comの環境変数を確認してください:")
+                context_parts.append("   - GOOGLE_CREDENTIALS_FILE: Google認証ファイルのパス（例: config/google-credentials-474807.json）")
+                context_parts.append("   - GSC_SITE_URL: GSCサイトURL（例: https://isetan.mistore.jp/moodmark/）")
+                context_parts.append("2. 認証ファイルが正しくアップロードされているか確認してください")
+                context_parts.append("3. サービスアカウントにGSCへのアクセス権限があるか確認してください")
+                context_parts.append("")
+                context_parts.append("⚠️ データが取得できないため、年次比較分析は実行できません。")
+                context_parts.append("上記のエラーメッセージを確認し、設定を修正してください。")
+                context_parts.append("")
+            else:
                 context_parts.append("=== 年次比較データ（GSC） ===")
                 context_parts.append("")
                 context_parts.append("【今年のデータ】")
@@ -636,9 +653,6 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 context_parts.append(f"平均検索順位: {changes.get('position', 0):+.2f}位")
                 context_parts.append("")
                 context_parts.append("上記の年次比較データを基に、昨年と比べて今年のオーガニック集客がどう変化したかを分析してください。")
-                context_parts.append("")
-            elif 'error' in yearly_comparison:
-                context_parts.append(f"⚠️ 年次比較データ取得エラー: {yearly_comparison.get('error', 'Unknown error')}")
                 context_parts.append("")
         
         # 特定ページのGSCデータ取得

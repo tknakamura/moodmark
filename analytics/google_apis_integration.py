@@ -174,8 +174,12 @@ class GoogleAPIsIntegration:
         Returns:
             pd.DataFrame: GSCデータ
         """
-        if not self.gsc_service or not self.gsc_site_url:
-            logger.error("GSCサービスまたはサイトURLが設定されていません")
+        if not self.gsc_service:
+            logger.error("GSCサービスが初期化されていません。認証ファイルを確認してください。")
+            return pd.DataFrame()
+        
+        if not self.gsc_site_url:
+            logger.error("GSCサイトURLが設定されていません。環境変数GSC_SITE_URLを確認してください。")
             return pd.DataFrame()
         
         # デフォルトディメンション
@@ -317,6 +321,14 @@ class GoogleAPIsIntegration:
             dict: ページのGSCデータ（クリック数、インプレッション数、CTR、平均順位など）
         """
         try:
+            # GSCサービスが初期化されているか確認
+            if not self.gsc_service:
+                logger.error("GSCサービスが初期化されていません。認証ファイルを確認してください。")
+                return {
+                    'page_url': page_url,
+                    'error': 'GSCサービスが初期化されていません。認証ファイル（GOOGLE_CREDENTIALS_FILE）を確認してください。'
+                }
+            
             # ページURLを正規化（サイトURLとの相対パスに変換）
             from urllib.parse import urlparse
             parsed_url = urlparse(page_url)
@@ -338,7 +350,7 @@ class GoogleAPIsIntegration:
                     'impressions': 0,
                     'ctr': 0.0,
                     'avg_position': 0.0,
-                    'error': 'データが見つかりませんでした'
+                    'error': 'GSCデータが取得できませんでした。認証ファイルまたは環境変数を確認してください。'
                 }
             
             # 指定されたページのデータをフィルタリング
@@ -411,9 +423,21 @@ class GoogleAPIsIntegration:
             logger.info(f"年次比較データ取得: 今年 {this_year_start.strftime('%Y-%m-%d')} ～ {this_year_end.strftime('%Y-%m-%d')}")
             logger.info(f"                  昨年 {last_year_start.strftime('%Y-%m-%d')} ～ {last_year_end.strftime('%Y-%m-%d')}")
             
+            # GSCサービスが初期化されているか確認
+            if not self.gsc_service:
+                logger.error("GSCサービスが初期化されていません。年次比較データを取得できません。")
+                return {
+                    'error': 'GSCサービスが初期化されていません。認証ファイル（GOOGLE_CREDENTIALS_FILE）を確認してください。'
+                }
+            
             # 今年のデータ取得
             if page_url:
                 this_year_data = self.get_page_specific_gsc_data(page_url, date_range_days)
+                # エラーが含まれている場合は、エラーを返す
+                if 'error' in this_year_data:
+                    return {
+                        'error': this_year_data.get('error', '今年のデータ取得エラー')
+                    }
             else:
                 gsc_data = self.get_gsc_data(date_range_days=date_range_days, dimensions=['page'])
                 if not gsc_data.empty:
@@ -424,7 +448,10 @@ class GoogleAPIsIntegration:
                         'avg_position': round(gsc_data['position'].mean(), 2)
                     }
                 else:
-                    this_year_data = {'clicks': 0, 'impressions': 0, 'ctr': 0.0, 'avg_position': 0.0}
+                    logger.warning("今年のGSCデータが取得できませんでした（空のDataFrame）")
+                    return {
+                        'error': '今年のGSCデータが取得できませんでした。認証ファイルまたは環境変数を確認してください。'
+                    }
             
             # 昨年のデータ取得（カスタム日付範囲で取得）
             last_year_gsc_data = self._get_gsc_data_custom_range(
@@ -504,8 +531,15 @@ class GoogleAPIsIntegration:
         Returns:
             pd.DataFrame or dict: GSCデータ
         """
-        if not self.gsc_service or not self.gsc_site_url:
-            return pd.DataFrame() if not page_url else {'error': 'GSCサービスが設定されていません'}
+        if not self.gsc_service:
+            error_msg = 'GSCサービスが初期化されていません。認証ファイル（GOOGLE_CREDENTIALS_FILE）を確認してください。'
+            logger.error(error_msg)
+            return pd.DataFrame() if not page_url else {'error': error_msg}
+        
+        if not self.gsc_site_url:
+            error_msg = 'GSCサイトURLが設定されていません。環境変数GSC_SITE_URLを確認してください。'
+            logger.error(error_msg)
+            return pd.DataFrame() if not page_url else {'error': error_msg}
         
         try:
             dimensions = ['page', 'date'] if page_url else ['page']
