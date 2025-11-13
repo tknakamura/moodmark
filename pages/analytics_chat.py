@@ -28,7 +28,6 @@ from analytics.ai_analytics_chat import AIAnalyticsChat
 st.set_page_config(
     page_title="GA4/GSC AI分析チャット",
     page_icon="📊",
-    layout="wide",
     layout="wide"
 )
 
