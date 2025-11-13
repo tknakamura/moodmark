@@ -1232,12 +1232,20 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                     context_parts.append("")
         
         if needs_ga4:
+            import time
+            step_start_time = time.time()
             logger.info(f"GA4データが必要と判定されました。取得を開始...")
             if progress_callback:
                 progress_callback("[STEP] 📈 GA4データを取得中...\n")
             # URLが指定されている場合は個別ページのデータを取得
             page_url_for_ga4 = urls[0] if urls else None
             ga4_summary = self._get_ga4_summary(date_range, start_date, end_date, page_url=page_url_for_ga4)
+            
+            step_elapsed = time.time() - step_start_time
+            logger.info(f"GA4データ取得完了: {step_elapsed:.2f}秒")
+            if step_elapsed > 5.0:
+                logger.warning(f"⚠️ GA4データ取得に時間がかかりました: {step_elapsed:.2f}秒")
+            
             if "error" not in ga4_summary:
                 data_status['ga4_data'] = True
                 is_page_specific = ga4_summary.get('is_page_specific', False)
