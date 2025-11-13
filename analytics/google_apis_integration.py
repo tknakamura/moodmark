@@ -760,21 +760,24 @@ class GoogleAPIsIntegration:
             page_path = parsed_url.path
             
             # カスタム日付範囲が指定されている場合はそれを使用、そうでなければdate_range_daysを使用
+            # 個別ページのデータ取得では、dateディメンションを削除してデータ量を削減（タイムアウト回避）
             if start_date and end_date:
                 logger.info(f"カスタム日付範囲でGA4データを取得: {start_date} ～ {end_date}, ページ: {page_path}")
+                logger.info(f"  最適化: dateディメンションを除外してデータ量を削減")
                 ga4_data = self.get_ga4_data_custom_range(
                     start_date=start_date,
                     end_date=end_date,
                     metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
-                    dimensions=['pagePath', 'date']
+                    dimensions=['pagePath']  # dateディメンションを削除してデータ量を削減
                 )
                 logger.info(f"GA4データ取得完了（カスタム範囲）: {len(ga4_data)}行")
             else:
                 logger.info(f"GA4データを取得: 期間={date_range_days}日, ページ: {page_path}")
+                logger.info(f"  最適化: dateディメンションを除外してデータ量を削減")
                 ga4_data = self.get_ga4_data(
                     date_range_days=date_range_days,
                     metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
-                    dimensions=['pagePath', 'date']
+                    dimensions=['pagePath']  # dateディメンションを削除してデータ量を削減
                 )
                 logger.info(f"GA4データ取得完了: {len(ga4_data)}行")
             

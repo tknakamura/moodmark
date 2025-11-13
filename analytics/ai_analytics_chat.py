@@ -280,9 +280,25 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 )
                 
                 if 'error' in page_data:
-                    logger.warning(f"個別ページのGA4データ取得エラー: {page_data.get('error')}")
+                    error_msg = page_data.get('error', 'Unknown error')
+                    is_timeout = page_data.get('timeout', False)
+                    logger.warning(f"個別ページのGA4データ取得エラー: {error_msg}")
+                    
+                    # タイムアウトの場合は、エラーメッセージをより詳細に
+                    if is_timeout:
+                        return {
+                            "error": error_msg,
+                            "total_sessions": 0,
+                            "total_users": 0,
+                            "total_pageviews": 0,
+                            "avg_bounce_rate": 0.0,
+                            "avg_session_duration": 0.0,
+                            "is_page_specific": True,
+                            "timeout": True
+                        }
+                    
                     return {
-                        "error": page_data.get('error', 'Unknown error'),
+                        "error": error_msg,
                         "total_sessions": 0,
                         "total_users": 0,
                         "total_pageviews": 0,
@@ -1181,10 +1197,17 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             else:
                 # エラーが発生した場合もコンテキストに含める
                 error_msg = ga4_summary.get('error', 'Unknown error')
+                is_timeout = ga4_summary.get('timeout', False)
                 logger.warning(f"GA4データ取得エラー: {error_msg}")
+                
                 context_parts.append("=== Google Analytics 4 (GA4) データ ===")
-                context_parts.append(f"❌ エラー: {error_msg}")
-                context_parts.append("GA4データが取得できませんでした。認証状態とAPI接続を確認してください。")
+                if is_timeout:
+                    context_parts.append(f"⚠️ タイムアウト: {error_msg}")
+                    context_parts.append("GA4データの取得に時間がかかりすぎたため、タイムアウトしました。")
+                    context_parts.append("他のデータ（GSC、SEO分析）で分析を続行します。")
+                else:
+                    context_parts.append(f"❌ エラー: {error_msg}")
+                    context_parts.append("GA4データが取得できませんでした。認証状態とAPI接続を確認してください。")
                 context_parts.append("")
         else:
             logger.info("GA4データは不要と判定されました（キーワードマッチなし、URLなし、年次比較なし）")
