@@ -4,6 +4,7 @@ SEO分析モジュール
 ページコンテンツのスクレイピングとHTML/CSS解析機能
 """
 
+import os
 import requests
 from bs4 import BeautifulSoup
 import json
