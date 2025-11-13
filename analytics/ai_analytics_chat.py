@@ -1374,19 +1374,22 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                 context_parts.append("")
         
         # データコンテキストの検証
+        total_elapsed = time.time() - start_time
         context_text = "\n".join(context_parts)
         logger.info(f"データコンテキスト構築完了")
+        logger.info(f"  総処理時間: {total_elapsed:.2f}秒")
         logger.info(f"  コンテキスト長: {len(context_text)}文字")
         logger.info(f"  コンテキスト行数: {len(context_parts)}行")
         
         if not context_text.strip():
             logger.warning("⚠️ データコンテキストが空です")
         else:
-            # コンテキストのサマリーをログに記録
-            has_seo_data = "SEO分析結果" in context_text
-            has_ga4_data = "GA4" in context_text
-            has_gsc_data = "GSC" in context_text
-            logger.info(f"  含まれるデータ: SEO={has_seo_data}, GA4={has_ga4_data}, GSC={has_gsc_data}")
+            # データ取得状態をログに記録（正確な判定）
+            has_gsc_data_success = data_status.get('gsc_data', False) or data_status.get('gsc_page_specific', False)
+            logger.info(f"  含まれるデータ: SEO={data_status['seo_analysis']}, GA4={data_status['ga4_data']}, GSC={has_gsc_data_success}")
+        
+        if total_elapsed > 10.0:
+            logger.warning(f"⚠️ データコンテキスト構築に時間がかかりました: {total_elapsed:.2f}秒")
         
         logger.info("=" * 60)
         
