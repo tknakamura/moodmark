@@ -601,11 +601,23 @@ class GoogleAPIsIntegration:
         except HttpError as e:
             error_details = json.loads(e.content.decode('utf-8')) if e.content else {}
             error_reason = error_details.get('error', {}).get('message', str(e))
-            logger.error(f"GA4 API エラー: {error_reason}")
+            error_code = error_details.get('error', {}).get('code', 'N/A')
+            logger.error(f"GA4 API エラー (コード: {error_code}): {error_reason}")
+            logger.error(f"  プロパティID: {self.ga4_property_id}")
             logger.error(f"  エラー詳細: {error_details}")
+            
+            # よくあるエラーの原因をログに記録
+            if error_code == 403:
+                logger.error("  考えられる原因: サービスアカウントにGA4へのアクセス権限がありません")
+                logger.error("  解決方法: GA4プロパティでサービスアカウントに閲覧者以上の権限を付与してください")
+            elif error_code == 400:
+                logger.error("  考えられる原因: プロパティIDが無効です")
+                logger.error("  解決方法: GA4_PROPERTY_ID環境変数を確認してください")
+            
             return pd.DataFrame()
         except Exception as e:
             logger.error(f"GA4データ取得エラー: {e}", exc_info=True)
+            logger.error(f"  プロパティID: {self.ga4_property_id}")
             return pd.DataFrame()
     
     def get_ga4_data_custom_range(self, start_date: str, end_date: str, metrics=None, dimensions=None):

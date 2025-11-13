@@ -289,8 +289,21 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             
             if ga4_data.empty:
                 logger.warning("GA4データが空です。認証状態とAPI接続を確認してください。")
+                logger.warning(f"  GA4プロパティID: {self.google_apis.ga4_property_id}")
+                logger.warning(f"  GA4サービス初期化: {self.google_apis.ga4_service is not None}")
+                
+                # より詳細なエラーメッセージ
+                error_msg = "GA4データが取得できませんでした。"
+                if not self.google_apis.ga4_property_id:
+                    error_msg += " GA4_PROPERTY_ID環境変数が設定されていません。"
+                elif not self.google_apis.ga4_service:
+                    error_msg += " GA4サービスが初期化されていません。認証情報を確認してください。"
+                else:
+                    error_msg += " サービスアカウントにGA4へのアクセス権限がない可能性があります。"
+                    error_msg += " GA4プロパティでサービスアカウントに閲覧者以上の権限を付与してください。"
+                
                 return {
-                    "error": "GA4データが取得できませんでした。認証状態とAPI接続を確認してください。",
+                    "error": error_msg,
                     "total_sessions": 0,
                     "total_users": 0,
                     "total_pageviews": 0,
