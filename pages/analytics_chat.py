@@ -132,9 +132,36 @@ with st.sidebar:
         
         # エラーがある場合の表示
         if auth_status['errors']:
-            with st.expander("⚠️ エラー詳細", expanded=False):
+            with st.expander("⚠️ エラー詳細", expanded=True):
                 for error in auth_status['errors']:
                     st.error(error)
+                
+                # 診断情報の表示
+                if auth_status.get('diagnostics'):
+                    st.markdown("**診断情報:**")
+                    diagnostics = auth_status['diagnostics']
+                    
+                    if diagnostics.get('credentials_type') == 'GOOGLE_CREDENTIALS_JSON':
+                        st.info("💡 **推奨**: `GOOGLE_CREDENTIALS_JSON`環境変数が設定されています。")
+                        st.info("認証ファイル（JSON）の内容全体を環境変数に貼り付けてください。")
+                        if not diagnostics.get('json_valid', True):
+                            st.error("JSON形式が不正です。正しいJSON形式であることを確認してください。")
+                    elif diagnostics.get('credentials_type') == 'GOOGLE_CREDENTIALS_FILE':
+                        st.info("💡 `GOOGLE_CREDENTIALS_FILE`環境変数が設定されています。")
+                        if not diagnostics.get('file_exists', False):
+                            st.error(f"ファイルが見つかりません: {os.getenv('GOOGLE_CREDENTIALS_FILE')}")
+                            st.info("Render.comでファイルをアップロードするか、`GOOGLE_CREDENTIALS_JSON`環境変数を使用してください。")
+                    else:
+                        st.warning("認証情報の設定方法:")
+                        st.markdown("""
+                        1. **推奨方法**: `GOOGLE_CREDENTIALS_JSON`環境変数を設定
+                           - 認証ファイル（JSON）の内容全体をコピー
+                           - Render.comの環境変数に貼り付け
+                        
+                        2. **代替方法**: `GOOGLE_CREDENTIALS_FILE`環境変数を設定
+                           - 認証ファイルをRender.comにアップロード
+                           - ファイルパスを環境変数に設定
+                        """)
         
         # 警告がある場合の表示
         if auth_status['warnings']:

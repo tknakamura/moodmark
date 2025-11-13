@@ -107,26 +107,46 @@ class GoogleAPIsIntegration:
             'ga4_property_id_set': False,
             'gsc_site_url_set': False,
             'errors': [],
-            'warnings': []
+            'warnings': [],
+            'diagnostics': {}
         }
+        
+        # 環境変数の確認
+        google_credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+        google_credentials_file = os.getenv('GOOGLE_CREDENTIALS_FILE')
+        
+        status['diagnostics']['GOOGLE_CREDENTIALS_JSON_set'] = bool(google_credentials_json)
+        status['diagnostics']['GOOGLE_CREDENTIALS_FILE_set'] = bool(google_credentials_file)
         
         # 認証情報の確認
         if self.credentials:
             status['credentials_loaded'] = True
             status['authenticated'] = True
+            status['diagnostics']['credentials_type'] = 'loaded'
         else:
             status['errors'].append('認証情報が読み込まれていません')
             # 環境変数の確認
-            if not os.getenv('GOOGLE_CREDENTIALS_JSON') and not os.getenv('GOOGLE_CREDENTIALS_FILE'):
+            if not google_credentials_json and not google_credentials_file:
                 status['errors'].append('GOOGLE_CREDENTIALS_JSONまたはGOOGLE_CREDENTIALS_FILEが設定されていません')
-            elif os.getenv('GOOGLE_CREDENTIALS_JSON'):
+                status['diagnostics']['credentials_type'] = 'none'
+            elif google_credentials_json:
                 try:
-                    json.loads(os.getenv('GOOGLE_CREDENTIALS_JSON'))
-                except json.JSONDecodeError:
-                    status['errors'].append('GOOGLE_CREDENTIALS_JSONのJSON形式が不正です')
-            elif os.getenv('GOOGLE_CREDENTIALS_FILE'):
-                if not os.path.exists(os.getenv('GOOGLE_CREDENTIALS_FILE')):
-                    status['errors'].append(f'認証ファイルが見つかりません: {os.getenv("GOOGLE_CREDENTIALS_FILE")}')
+                    json.loads(google_credentials_json)
+                    status['diagnostics']['credentials_type'] = 'GOOGLE_CREDENTIALS_JSON'
+                    status['diagnostics']['json_valid'] = True
+                    status['warnings'].append('GOOGLE_CREDENTIALS_JSONは設定されていますが、認証情報が読み込まれていません。認証処理でエラーが発生した可能性があります。')
+                except json.JSONDecodeError as e:
+                    status['errors'].append(f'GOOGLE_CREDENTIALS_JSONのJSON形式が不正です: {str(e)}')
+                    status['diagnostics']['credentials_type'] = 'GOOGLE_CREDENTIALS_JSON'
+                    status['diagnostics']['json_valid'] = False
+            elif google_credentials_file:
+                status['diagnostics']['credentials_type'] = 'GOOGLE_CREDENTIALS_FILE'
+                if os.path.exists(google_credentials_file):
+                    status['diagnostics']['file_exists'] = True
+                    status['warnings'].append('GOOGLE_CREDENTIALS_FILEは存在しますが、認証情報が読み込まれていません。認証処理でエラーが発生した可能性があります。')
+                else:
+                    status['errors'].append(f'認証ファイルが見つかりません: {google_credentials_file}')
+                    status['diagnostics']['file_exists'] = False
         
         # GA4サービスの確認
         if self.ga4_service:
