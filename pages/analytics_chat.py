@@ -496,6 +496,7 @@ if prompt := st.chat_input(chat_placeholder):
                     step_messages = []
                     ai_response_parts = []
                     in_ai_response = False
+                    answer_placeholder = st.empty()  # AI応答用のプレースホルダー
                     
                     # ストリーミング応答を処理
                     try:
@@ -517,8 +518,8 @@ if prompt := st.chat_input(chat_placeholder):
                                     status_placeholder.empty()  # ステップメッセージをクリア
                                 
                                 ai_response_parts.append(chunk)
-                                # AI応答をリアルタイム表示
-                                st.markdown("".join(ai_response_parts))
+                                # AI応答をリアルタイム表示（プレースホルダー内で更新）
+                                answer_placeholder.markdown("".join(ai_response_parts))
                         
                         # 完全な応答を取得
                         full_answer = "".join(ai_response_parts)
