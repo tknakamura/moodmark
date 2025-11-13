@@ -388,29 +388,36 @@ if prompt := st.chat_input(chat_placeholder):
                     st.info("🔍 SEO分析を実行中...")
                 
                 try:
-                    answer = st.session_state.ai_chat.ask(
-                        question,
-                        model=st.session_state.model,
-                        site_name=st.session_state.selected_site
-                    )
+                    # ストリーミング応答を取得
+                    status_placeholder.empty()  # データ取得完了後、ストリーミング開始前にステータスをクリア
                     
-                    # 完了表示
-                    with status_placeholder.container():
-                        st.success("✅ 分析完了！")
-                    
-                    # 少し待ってからクリア
-                    import time
-                    time.sleep(0.3)
-                    status_placeholder.empty()
-                    
-                    # AI回答を表示
-                    st.markdown(answer)
+                    # ストリーミング応答を表示
+                    try:
+                        # st.write_stream()を使用してリアルタイム表示
+                        full_answer = st.write_stream(
+                            st.session_state.ai_chat.ask_stream(
+                                question,
+                                model=st.session_state.model,
+                                site_name=st.session_state.selected_site
+                            )
+                        )
+                    except AttributeError:
+                        # Streamlit 1.28.0未満の場合の代替実装
+                        answer_placeholder = st.empty()
+                        full_answer = ""
+                        for chunk in st.session_state.ai_chat.ask_stream(
+                            question,
+                            model=st.session_state.model,
+                            site_name=st.session_state.selected_site
+                        ):
+                            full_answer += chunk
+                            answer_placeholder.markdown(full_answer)
                     
                     # メッセージ履歴に追加
                     answer_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     st.session_state.messages.append({
                         "role": "assistant",
-                        "content": answer,
+                        "content": full_answer,
                         "timestamp": answer_timestamp
                     })
                     st.caption(f"🕐 {answer_timestamp}")
@@ -461,29 +468,36 @@ if prompt := st.chat_input(chat_placeholder):
                     st.info("📊 データ分析を実行中...")
                 
                 try:
-                    answer = st.session_state.ai_chat.ask(
-                        question,
-                        model=st.session_state.model,
-                        site_name=st.session_state.selected_site
-                    )
+                    # ストリーミング応答を取得
+                    status_placeholder.empty()  # データ取得完了後、ストリーミング開始前にステータスをクリア
                     
-                    # 完了表示
-                    with status_placeholder.container():
-                        st.success("✅ 分析完了！")
-                    
-                    # 少し待ってからクリア
-                    import time
-                    time.sleep(0.3)
-                    status_placeholder.empty()
-                    
-                    # AI回答を表示
-                    st.markdown(answer)
+                    # ストリーミング応答を表示
+                    try:
+                        # st.write_stream()を使用してリアルタイム表示
+                        full_answer = st.write_stream(
+                            st.session_state.ai_chat.ask_stream(
+                                question,
+                                model=st.session_state.model,
+                                site_name=st.session_state.selected_site
+                            )
+                        )
+                    except AttributeError:
+                        # Streamlit 1.28.0未満の場合の代替実装
+                        answer_placeholder = st.empty()
+                        full_answer = ""
+                        for chunk in st.session_state.ai_chat.ask_stream(
+                            question,
+                            model=st.session_state.model,
+                            site_name=st.session_state.selected_site
+                        ):
+                            full_answer += chunk
+                            answer_placeholder.markdown(full_answer)
                     
                     # メッセージ履歴に追加
                     answer_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     st.session_state.messages.append({
                         "role": "assistant",
-                        "content": answer,
+                        "content": full_answer,
                         "timestamp": answer_timestamp
                     })
                     st.caption(f"🕐 {answer_timestamp}")

@@ -9,7 +9,7 @@ import sys
 import json
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Generator
 import logging
 
 # プロジェクトルートをパスに追加
@@ -1424,6 +1424,140 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             import traceback
             error_details = traceback.format_exc()
             logger.error(f"エラー詳細:\n{error_details}")
+            raise  # エラーを再発生させて、UI側で処理
+    
+    def ask_stream(self, question: str, model: str = "gpt-4o-mini", site_name: str = None) -> Generator[str, None, str]:
+        """
+        AIに質問してストリーミング応答を取得（ジェネレータ）
+        
+        Args:
+            question (str): ユーザーの質問
+            model (str): 使用するモデル名
+            site_name (str): サイト名（'moodmark' または 'moodmarkgift'）
+        
+        Yields:
+            str: ストリーミング応答のチャンク
+        
+        Returns:
+            str: 完全な応答（エラー時は部分応答）
+        """
+        try:
+            # データコンテキストを構築（ask()と同じロジック）
+            data_context = self._build_data_context(question, site_name=site_name)
+            
+            # 質問の種類を判定
+            is_yearly_comparison = any(keyword in question for keyword in [
+                "昨年", "去年", "前年", "year ago", "last year", "前年同期", "前年比", "年次比較"
+            ])
+            is_seo_question = any(keyword in question for keyword in [
+                "SEO", "seo", "改善", "最適化", "タイトル", "ディスクリプション", "見出し", "構造化データ"
+            ])
+            
+            # URLを抽出
+            import re
+            url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+            urls = re.findall(url_pattern, question)
+            
+            # プロンプトを構築
+            if is_yearly_comparison:
+                user_prompt = f"""以下のデータを基に、ユーザーの質問に回答してください。
+
+{data_context}
+
+ユーザーの質問: {question}
+
+回答には以下を含めてください:
+- 昨年と今年の数値の比較
+- 増減率の計算
+- 変化の分析と原因の推測
+- 改善提案（該当する場合）
+- わかりやすい日本語で説明"""
+            elif is_seo_question:
+                user_prompt = f"""以下のSEO分析データを基に、ユーザーの質問に回答してください。
+
+{data_context}
+
+ユーザーの質問: {question}
+
+【回答形式】
+必ず以下の3段階の構造で回答してください：
+
+1. 【現状分析】
+   - 現在のSEO要素の状態を数値と共に明確に示す
+   - 最適値との比較を示す
+   - 各要素の現状を整理
+
+2. 【課題整理】
+   - 現状分析から見つかった問題点を優先度順に整理
+   - 各課題がSEOに与える影響を説明
+   - 緊急度・重要度を考慮
+
+3. 【改善提案】
+   - 各課題に対する具体的な改善方法を提示
+   - 実装可能な具体的な改善案を提示（例：タイトルの改善案、ディスクリプションの改善案）
+   - 優先順位をつけて改善すべき順序を提示
+   - 可能であれば、改善前後の比較も示す
+
+わかりやすい日本語で、具体的な数値と共に説明してください。"""
+            else:
+                user_prompt = f"""以下のデータを基に、ユーザーの質問に回答してください。
+
+{data_context}
+
+ユーザーの質問: {question}
+
+回答は以下の点を含めてください：
+- データの要約
+- 重要な数値の説明
+- 改善提案やアドバイス（該当する場合）
+- わかりやすい日本語で説明"""
+            
+            # OpenAI APIをストリーミングモードで呼び出し
+            logger.info(f"OpenAI APIをストリーミングモードで呼び出し中... (モデル: {model})")
+            logger.info(f"プロンプト長: {len(user_prompt)}文字")
+            
+            full_answer = ""  # 完全な応答を蓄積
+            
+            try:
+                stream = self.client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": self.system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=2000,
+                    stream=True  # ストリーミングを有効化
+                )
+                
+                # ストリーミング応答を処理
+                for chunk in stream:
+                    if chunk.choices[0].delta.content is not None:
+                        content = chunk.choices[0].delta.content
+                        full_answer += content
+                        yield content
+                
+                logger.info(f"ストリーミング応答を生成しました: {len(full_answer)}文字")
+                logger.info("=" * 60)
+                
+                # 完全な応答を返す（ジェネレータの戻り値として）
+                return full_answer
+                
+            except Exception as api_error:
+                logger.error(f"OpenAI APIストリーミング呼び出しエラー: {api_error}", exc_info=True)
+                # 部分的な応答があれば返す
+                if full_answer:
+                    yield f"\n\n⚠️ エラーが発生しました: {str(api_error)}"
+                    return full_answer
+                raise api_error
+            
+        except Exception as e:
+            logger.error(f"AIストリーミング応答生成エラー: {e}", exc_info=True)
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"エラー詳細:\n{error_details}")
+            # エラーメッセージをyieldしてから再発生
+            yield f"\n\n❌ エラーが発生しました: {str(e)}"
             raise  # エラーを再発生させて、UI側で処理
     
     def get_available_models(self) -> List[str]:
