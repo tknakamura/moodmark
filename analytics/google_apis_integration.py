@@ -724,6 +724,113 @@ class GoogleAPIsIntegration:
             logger.error(f"  プロパティID: {self.ga4_property_id}")
             return pd.DataFrame()
     
+    def get_page_specific_ga4_data(self, page_url: str, date_range_days=30, start_date: str = None, end_date: str = None):
+        """
+        特定ページのGA4データを取得
+        
+        Args:
+            page_url (str): 分析するページのURL
+            date_range_days (int): 取得する日数（start_date/end_dateが指定されていない場合に使用）
+            start_date (str): 開始日 (YYYY-MM-DD形式、オプション)
+            end_date (str): 終了日 (YYYY-MM-DD形式、オプション)
+            
+        Returns:
+            dict: ページのGA4データ（セッション数、ユーザー数、ページビュー数、バウンス率、セッション時間など）
+        """
+        try:
+            # GA4サービスが初期化されているか確認
+            if not self.ga4_service or not self.ga4_property_id:
+                logger.error("GA4サービスまたはプロパティIDが設定されていません")
+                return {
+                    'page_url': page_url,
+                    'error': 'GA4サービスが初期化されていません。認証ファイルまたは環境変数を確認してください。'
+                }
+            
+            # ページURLを正規化（サイトURLとの相対パスに変換）
+            from urllib.parse import urlparse
+            parsed_url = urlparse(page_url)
+            page_path = parsed_url.path
+            
+            # カスタム日付範囲が指定されている場合はそれを使用、そうでなければdate_range_daysを使用
+            if start_date and end_date:
+                logger.info(f"カスタム日付範囲でGA4データを取得: {start_date} ～ {end_date}, ページ: {page_path}")
+                ga4_data = self.get_ga4_data_custom_range(
+                    start_date=start_date,
+                    end_date=end_date,
+                    metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
+                    dimensions=['pagePath', 'date']
+                )
+            else:
+                logger.info(f"GA4データを取得: 期間={date_range_days}日, ページ: {page_path}")
+                ga4_data = self.get_ga4_data(
+                    date_range_days=date_range_days,
+                    metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
+                    dimensions=['pagePath', 'date']
+                )
+            
+            # ga4_dataが空の場合
+            if ga4_data.empty:
+                logger.warning(f"ページ固有のGA4データが見つかりませんでした: {page_path}")
+                return {
+                    'page_url': page_url,
+                    'page_path': page_path,
+                    'sessions': 0,
+                    'users': 0,
+                    'pageviews': 0,
+                    'bounce_rate': 0.0,
+                    'avg_session_duration': 0.0,
+                    'error': 'GA4データが取得できませんでした。認証ファイルまたは環境変数を確認してください。'
+                }
+            
+            # 指定されたページのデータをフィルタリング
+            # ページパスが完全一致または部分一致するものを検索
+            page_data = ga4_data[
+                ga4_data['pagePath'].str.contains(page_path, case=False, na=False)
+            ]
+            
+            if page_data.empty:
+                logger.warning(f"ページ '{page_path}' のGA4データが見つかりませんでした")
+                return {
+                    'page_url': page_url,
+                    'page_path': page_path,
+                    'sessions': 0,
+                    'users': 0,
+                    'pageviews': 0,
+                    'bounce_rate': 0.0,
+                    'avg_session_duration': 0.0,
+                    'error': f'ページ "{page_path}" のGA4データが見つかりませんでした'
+                }
+            
+            # 集計
+            total_sessions = page_data['sessions'].sum() if 'sessions' in page_data.columns else 0
+            total_users = page_data['activeUsers'].sum() if 'activeUsers' in page_data.columns else 0
+            total_pageviews = page_data['screenPageViews'].sum() if 'screenPageViews' in page_data.columns else 0
+            avg_bounce_rate = page_data['bounceRate'].mean() if 'bounceRate' in page_data.columns else 0.0
+            avg_session_duration = page_data['averageSessionDuration'].mean() if 'averageSessionDuration' in page_data.columns else 0.0
+            
+            logger.info(f"ページ固有のGA4データ取得完了: {page_path}")
+            logger.info(f"  セッション数: {total_sessions:,}, ユーザー数: {total_users:,}, PV: {total_pageviews:,}")
+            logger.info(f"  バウンス率: {avg_bounce_rate:.2f}%, 平均セッション時間: {avg_session_duration:.2f}秒")
+            
+            return {
+                'page_url': page_url,
+                'page_path': page_path,
+                'sessions': int(total_sessions),
+                'users': int(total_users),
+                'pageviews': int(total_pageviews),
+                'bounce_rate': round(avg_bounce_rate, 2),
+                'avg_session_duration': round(avg_session_duration, 2),
+                'date_range_days': date_range_days,
+                'is_page_specific': True
+            }
+            
+        except Exception as e:
+            logger.error(f"ページ固有のGA4データ取得エラー ({page_url}): {e}", exc_info=True)
+            return {
+                'page_url': page_url,
+                'error': f'データ取得エラー: {str(e)}'
+            }
+    
     def get_gsc_data(self, date_range_days=30, dimensions=None, row_limit=25000, site_name='moodmark'):
         """
         Google Search Consoleからデータを取得

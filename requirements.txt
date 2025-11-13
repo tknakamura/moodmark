@@ -29,4 +29,4 @@ lxml>=4.9.0
 # JavaScript Execution (Optional - for dynamic structured data)
 # Uncomment the following lines if you want to use Selenium or Playwright
 # selenium>=4.15.0
-# playwright>=1.40.0
+playwright>=1.40.0

@@ -255,7 +255,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         # デフォルトは30日
         return (None, None, 30)
     
-    def _get_ga4_summary(self, date_range_days: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+    def _get_ga4_summary(self, date_range_days: int, start_date: str = None, end_date: str = None, page_url: str = None) -> Dict[str, Any]:
         """
         GA4データのサマリーを取得
         
@@ -263,11 +263,51 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             date_range_days (int): 日数
             start_date (str): 開始日 (YYYY-MM-DD形式、オプション)
             end_date (str): 終了日 (YYYY-MM-DD形式、オプション)
+            page_url (str): ページURL（オプション、指定された場合は個別ページのデータを取得）
             
         Returns:
             dict: サマリーデータ
         """
         try:
+            # 個別ページのデータを取得する場合
+            if page_url:
+                logger.info(f"個別ページのGA4データ取得開始: URL={page_url}, 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
+                page_data = self.google_apis.get_page_specific_ga4_data(
+                    page_url=page_url,
+                    date_range_days=date_range_days,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                
+                if 'error' in page_data:
+                    logger.warning(f"個別ページのGA4データ取得エラー: {page_data.get('error')}")
+                    return {
+                        "error": page_data.get('error', 'Unknown error'),
+                        "total_sessions": 0,
+                        "total_users": 0,
+                        "total_pageviews": 0,
+                        "avg_bounce_rate": 0.0,
+                        "avg_session_duration": 0.0,
+                        "is_page_specific": True
+                    }
+                
+                # 個別ページのデータを返す
+                summary = {
+                    "total_sessions": page_data.get('sessions', 0),
+                    "total_users": page_data.get('users', 0),
+                    "total_pageviews": page_data.get('pageviews', 0),
+                    "avg_bounce_rate": page_data.get('bounce_rate', 0.0),
+                    "avg_session_duration": page_data.get('avg_session_duration', 0.0),
+                    "date_range_days": date_range_days,
+                    "is_page_specific": True,
+                    "page_url": page_url,
+                    "page_path": page_data.get('page_path', '')
+                }
+                
+                logger.info(f"個別ページのGA4サマリー: セッション={summary['total_sessions']:,}, ユーザー={summary['total_users']:,}, PV={summary['total_pageviews']:,}")
+                return summary
+            
+            # サイト全体のデータを取得する場合
             logger.info(f"GA4データ取得開始: 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
             
             # 基本的なメトリクスを取得
@@ -309,7 +349,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                     "total_users": 0,
                     "total_pageviews": 0,
                     "avg_bounce_rate": 0.0,
-                    "avg_session_duration": 0.0
+                    "avg_session_duration": 0.0,
+                    "is_page_specific": False
                 }
             
             summary = {
@@ -319,7 +360,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 "avg_bounce_rate": float(ga4_data['bounceRate'].mean()) if 'bounceRate' in ga4_data.columns else 0,
                 "avg_session_duration": float(ga4_data['averageSessionDuration'].mean()) if 'averageSessionDuration' in ga4_data.columns else 0,
                 "date_range_days": date_range_days,
-                "data_points": len(ga4_data)
+                "data_points": len(ga4_data),
+                "is_page_specific": False
             }
             
             logger.info(f"GA4サマリー: セッション={summary['total_sessions']:,}, ユーザー={summary['total_users']:,}, PV={summary['total_pageviews']:,}")
@@ -1098,10 +1140,17 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         
         if needs_ga4:
             logger.info(f"GA4データが必要と判定されました。取得を開始...")
-            ga4_summary = self._get_ga4_summary(date_range, start_date, end_date)
+            # URLが指定されている場合は個別ページのデータを取得
+            page_url_for_ga4 = urls[0] if urls else None
+            ga4_summary = self._get_ga4_summary(date_range, start_date, end_date, page_url=page_url_for_ga4)
             if "error" not in ga4_summary:
-                logger.info(f"GA4データ取得成功: セッション={ga4_summary['total_sessions']:,}, ユーザー={ga4_summary['total_users']:,}, PV={ga4_summary['total_pageviews']:,}")
-                context_parts.append("=== Google Analytics 4 (GA4) データ ===")
+                is_page_specific = ga4_summary.get('is_page_specific', False)
+                if is_page_specific:
+                    logger.info(f"個別ページのGA4データ取得成功: セッション={ga4_summary['total_sessions']:,}, ユーザー={ga4_summary['total_users']:,}, PV={ga4_summary['total_pageviews']:,}")
+                    context_parts.append(f"=== 個別ページのGoogle Analytics 4 (GA4) データ: {page_url_for_ga4} ===")
+                else:
+                    logger.info(f"GA4データ取得成功: セッション={ga4_summary['total_sessions']:,}, ユーザー={ga4_summary['total_users']:,}, PV={ga4_summary['total_pageviews']:,}")
+                    context_parts.append("=== Google Analytics 4 (GA4) データ（サイト全体） ===")
                 if start_date and end_date:
                     context_parts.append(f"期間: {start_date} ～ {end_date}")
                 else:
