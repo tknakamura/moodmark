@@ -459,6 +459,22 @@ if prompt := st.chat_input(chat_placeholder):
                     })
                     st.caption(f"🕐 {answer_timestamp}")
                     
+                except TimeoutError as e:
+                    # タイムアウトエラーの処理
+                    status_placeholder.empty()
+                    error_message = f"⏱️ タイムアウトエラー\n\n**エラー内容**: {str(e)}\n\n"
+                    error_message += "**考えられる原因**:\n"
+                    error_message += "- データ取得に時間がかかりすぎています\n"
+                    error_message += "- ネットワーク接続が遅い可能性があります\n\n"
+                    error_message += "**対処方法**:\n"
+                    error_message += "- しばらく待ってから再度お試しください\n"
+                    error_message += "- より短い期間のデータを指定してください\n"
+                    st.error(error_message)
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": error_message,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
                 except Exception as e:
                     # ステータス表示をクリア
                     status_placeholder.empty()
@@ -572,6 +588,22 @@ if prompt := st.chat_input(chat_placeholder):
                     })
                     st.caption(f"🕐 {answer_timestamp}")
                     
+                except TimeoutError as e:
+                    # タイムアウトエラーの処理
+                    status_placeholder.empty()
+                    error_message = f"⏱️ タイムアウトエラー\n\n**エラー内容**: {str(e)}\n\n"
+                    error_message += "**考えられる原因**:\n"
+                    error_message += "- データ取得に時間がかかりすぎています\n"
+                    error_message += "- ネットワーク接続が遅い可能性があります\n\n"
+                    error_message += "**対処方法**:\n"
+                    error_message += "- しばらく待ってから再度お試しください\n"
+                    error_message += "- より短い期間のデータを指定してください\n"
+                    st.error(error_message)
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": error_message,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
                 except Exception as e:
                     # ステータス表示をクリア
                     status_placeholder.empty()
