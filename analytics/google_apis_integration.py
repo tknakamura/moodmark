@@ -838,10 +838,20 @@ class GoogleAPIsIntegration:
             }
             
         except Exception as e:
-            logger.error(f"ページ固有のGA4データ取得エラー ({page_url}): {e}", exc_info=True)
+            error_msg = str(e)
+            logger.error(f"ページ固有のGA4データ取得エラー ({page_url}): {error_msg}", exc_info=True)
+            
+            # タイムアウトエラーの場合、より詳細なメッセージを返す
+            if 'timeout' in error_msg.lower() or 'timed out' in error_msg.lower():
+                return {
+                    'page_url': page_url,
+                    'error': f'GA4データ取得がタイムアウトしました。データ量が多いため、処理に時間がかかっています。他のデータ（GSC、SEO分析）で分析を続行します。',
+                    'timeout': True
+                }
+            
             return {
                 'page_url': page_url,
-                'error': f'データ取得エラー: {str(e)}'
+                'error': f'データ取得エラー: {error_msg}'
             }
     
     def get_gsc_data(self, date_range_days=30, dimensions=None, row_limit=25000, site_name='moodmark'):
