@@ -413,7 +413,7 @@ if prompt := st.chat_input(chat_placeholder):
                                 
                                 ai_response_parts.append(chunk)
                                 # AI応答をリアルタイム表示
-                                st.write("".join(ai_response_parts))
+                                st.markdown("".join(ai_response_parts))
                         
                         # 完全な応答を取得
                         full_answer = "".join(ai_response_parts)
@@ -517,7 +517,7 @@ if prompt := st.chat_input(chat_placeholder):
                                 
                                 ai_response_parts.append(chunk)
                                 # AI応答をリアルタイム表示
-                                st.write("".join(ai_response_parts))
+                                st.markdown("".join(ai_response_parts))
                         
                         # 完全な応答を取得
                         full_answer = "".join(ai_response_parts)
