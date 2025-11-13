@@ -9,10 +9,14 @@ import streamlit as st
 import sys
 import os
 from datetime import datetime
-from dotenv import load_dotenv
 
-# 環境変数の読み込み
-load_dotenv()
+# 環境変数の読み込み（オプショナル）
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenvがインストールされていない場合は環境変数が既に設定されていると仮定
+    pass
 
 # プロジェクトルートをパスに追加
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
