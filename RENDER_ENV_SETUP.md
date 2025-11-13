@@ -78,6 +78,11 @@ Render.comで環境変数を設定する方法を説明します。
 - **Value**: あなたのPage Speed Insights APIキー
 - **注意**: この環境変数はオプションです。設定しない場合、Page Speed Insightsの分析はスキップされます
 - **取得方法**:
+  1. Google Cloud Consoleにアクセス
+  2. プロジェクトを選択
+  3. 「APIとサービス」→「ライブラリ」から「PageSpeed Insights API」を有効化
+  4. 「認証情報」→「認証情報を作成」→「APIキー」を選択
+  5. 作成されたAPIキーをコピー
 
 #### 環境変数7: USE_PLAYWRIGHT（オプション、高度な機能）
 
@@ -99,12 +104,7 @@ Render.comで環境変数を設定する方法を説明します。
 
 - **Key**: `CHROMEDRIVER_PATH`
 - **Value**: ChromeDriverのパス（例: `/usr/local/bin/chromedriver`）
-- **注意**: Seleniumを使用する場合のみ必要。自動検出も試行されます 
-  1. Google Cloud Consoleにアクセス
-  2. プロジェクトを選択
-  3. 「APIとサービス」→「ライブラリ」から「PageSpeed Insights API」を有効化
-  4. 「認証情報」→「認証情報を作成」→「APIキー」を選択
-  5. 作成されたAPIキーをコピー
+- **注意**: Seleniumを使用する場合のみ必要。自動検出も試行されます
 
 ### ステップ3: Google認証情報ファイルの設定
 
