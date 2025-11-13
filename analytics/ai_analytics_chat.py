@@ -433,45 +433,51 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                     "avg_position": 0.0
                 }
             
-            # ページ別データを取得
-            if start_date and end_date:
-                # カスタム範囲の場合は、get_top_pages_gscを使えないので、gsc_dataから集計
+            # ページ別データを取得（取得済みのgsc_dataから集計して重複取得を避ける）
+            if 'page' in gsc_data.columns:
                 gsc_pages = gsc_data.groupby('page').agg({
                     'clicks': 'sum',
                     'impressions': 'sum',
                     'ctr': 'mean',
                     'position': 'mean'
                 }).reset_index()
+                # CTRを計算し直し
+                gsc_pages['ctr_calculated'] = (gsc_pages['clicks'] / gsc_pages['impressions'] * 100).round(2)
+                gsc_pages['avg_position'] = gsc_pages['position'].round(2)
                 gsc_pages = gsc_pages.sort_values('clicks', ascending=False).head(50)
             else:
-                gsc_pages = self.google_apis.get_top_pages_gsc(
-                    date_range_days=date_range_days,
-                    limit=50,
-                    site_name=site_name
-                )
+                # pageカラムがない場合は空のDataFrameを返す
+                import pandas as pd
+                gsc_pages = pd.DataFrame()
             
-            # クエリ別データを取得
-            if start_date and end_date:
-                # カスタム範囲の場合は、gsc_dataから集計
+            # クエリ別データを取得（取得済みのgsc_dataから集計して重複取得を避ける）
+            if 'query' in gsc_data.columns:
                 gsc_queries = gsc_data.groupby('query').agg({
                     'clicks': 'sum',
                     'impressions': 'sum',
                     'ctr': 'mean',
                     'position': 'mean'
                 }).reset_index()
+                # CTRを計算し直し
+                gsc_queries['ctr_calculated'] = (gsc_queries['clicks'] / gsc_queries['impressions'] * 100).round(2)
+                gsc_queries['avg_position'] = gsc_queries['position'].round(2)
                 gsc_queries = gsc_queries.sort_values('clicks', ascending=False).head(50)
             else:
-                gsc_queries = self.google_apis.get_top_queries_gsc(
-                    date_range_days=date_range_days,
-                    limit=50,
-                    site_name=site_name
-                )
+                # queryカラムがない場合は空のDataFrameを返す
+                import pandas as pd
+                gsc_queries = pd.DataFrame()
+            
+            # サマリー計算（gsc_dataから直接計算して正確性を向上）
+            total_clicks = int(gsc_data['clicks'].sum()) if not gsc_data.empty else 0
+            total_impressions = int(gsc_data['impressions'].sum()) if not gsc_data.empty else 0
+            avg_ctr = float((total_clicks / total_impressions * 100)) if total_impressions > 0 else 0.0
+            avg_position = float(gsc_data['position'].mean()) if not gsc_data.empty else 0.0
             
             summary = {
-                "total_clicks": int(gsc_pages['clicks'].sum()) if not gsc_pages.empty else 0,
-                "total_impressions": int(gsc_pages['impressions'].sum()) if not gsc_pages.empty else 0,
-                "avg_ctr": float(gsc_pages['ctr_calculated'].mean()) if not gsc_pages.empty and 'ctr_calculated' in gsc_pages.columns else 0,
-                "avg_position": float(gsc_pages['avg_position'].mean()) if not gsc_pages.empty and 'avg_position' in gsc_pages.columns else 0,
+                "total_clicks": total_clicks,
+                "total_impressions": total_impressions,
+                "avg_ctr": round(avg_ctr, 2),
+                "avg_position": round(avg_position, 2),
                 "top_pages_count": len(gsc_pages),
                 "top_queries_count": len(gsc_queries),
                 "date_range_days": date_range_days
@@ -566,10 +572,14 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
         Args:
             question (str): ユーザーの質問
             site_name (str): サイト名 ('moodmark' または 'moodmarkgift')、Noneの場合は自動判定またはデフォルトを使用
+            progress_callback: 進捗コールバック関数（オプション）
             
         Returns:
             str: データコンテキストの文字列
         """
+        import time
+        start_time = time.time()
+        
         logger.info("=" * 60)
         logger.info("データコンテキスト構築開始")
         logger.info(f"質問: {question[:100]}...")
@@ -1157,6 +1167,11 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             )
             
             if 'error' not in page_gsc_data:
+                step_elapsed = time.time() - step_start_time
+                logger.info(f"特定ページのGSCデータ取得完了: {step_elapsed:.2f}秒")
+                if step_elapsed > 5.0:
+                    logger.warning(f"⚠️ 特定ページのGSCデータ取得に時間がかかりました: {step_elapsed:.2f}秒")
+                
                 data_status['gsc_page_specific'] = True
                 clicks = page_gsc_data.get('clicks', 0)
                 impressions = page_gsc_data.get('impressions', 0)
@@ -1261,9 +1276,16 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             logger.info("GA4データは不要と判定されました（キーワードマッチなし、URLなし、年次比較なし）")
         
         if needs_gsc:
+            import time
+            step_start_time = time.time()
             if progress_callback and not (needs_page_specific_analysis and urls):  # 特定ページのGSCデータ取得と重複しない場合のみ
                 progress_callback("[STEP] 📊 GSCデータを取得中...\n")
             gsc_summary = self._get_gsc_summary(date_range, start_date, end_date, site_name=site_name)
+            
+            step_elapsed = time.time() - step_start_time
+            logger.info(f"GSCデータ（サイト全体）取得完了: {step_elapsed:.2f}秒")
+            if step_elapsed > 5.0:
+                logger.warning(f"⚠️ GSCデータ取得に時間がかかりました: {step_elapsed:.2f}秒")
             if "error" not in gsc_summary:
                 data_status['gsc_data'] = True
                 context_parts.append("=== Google Search Console (GSC) データ ===")
