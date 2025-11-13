@@ -1114,6 +1114,17 @@ class GoogleAPIsIntegration:
                 'date_range_days': date_range_days
             }
             
+        except HttpError as e:
+            error_details = json.loads(e.content.decode('utf-8')) if e.content else {}
+            error_reason = error_details.get('error', {}).get('message', str(e))
+            error_code = error_details.get('error', {}).get('code', e.resp.status if hasattr(e, 'resp') else 'N/A')
+            logger.error(f"GSC API エラー (コード: {error_code}): {error_reason}")
+            logger.error(f"  エラー詳細: {error_details}")
+            return {
+                'page_url': page_url,
+                'error': f'GSC API エラー: {error_reason}',
+                'error_code': error_code
+            }
         except Exception as e:
             logger.error(f"ページ固有のGSCデータ取得エラー ({page_url}): {e}")
             return {
@@ -1347,9 +1358,23 @@ class GoogleAPIsIntegration:
             
             return df
             
+        except HttpError as e:
+            error_details = json.loads(e.content.decode('utf-8')) if e.content else {}
+            error_reason = error_details.get('error', {}).get('message', str(e))
+            error_code = error_details.get('error', {}).get('code', e.resp.status if hasattr(e, 'resp') else 'N/A')
+            logger.error(f"GSC API エラー (コード: {error_code}): {error_reason}")
+            logger.error(f"  エラー詳細: {error_details}")
+            if page_url:
+                return {
+                    'error': f'GSC API エラー: {error_reason}',
+                    'error_code': error_code
+                }
+            return pd.DataFrame()
         except Exception as e:
             logger.error(f"カスタム日付範囲のGSCデータ取得エラー: {e}")
-            return pd.DataFrame() if not page_url else {'error': str(e)}
+            if page_url:
+                return {'error': str(e)}
+            return pd.DataFrame()
     
     def export_to_csv(self, data, filename, output_dir='data/processed'):
         """

@@ -395,10 +395,14 @@ if prompt := st.chat_input(chat_placeholder):
                     
                     # ストリーミング応答を処理
                     try:
+                        # 会話履歴を取得（直前の2-3件）
+                        conversation_history = st.session_state.messages[-3:] if len(st.session_state.messages) > 0 else []
+                        
                         for chunk in st.session_state.ai_chat.ask_stream(
                             question,
                             model=st.session_state.model,
-                            site_name=st.session_state.selected_site
+                            site_name=st.session_state.selected_site,
+                            conversation_history=conversation_history
                         ):
                             # ステップメッセージかAI応答かを判定
                             if chunk.startswith("[STEP]"):
@@ -422,10 +426,14 @@ if prompt := st.chat_input(chat_placeholder):
                         # Streamlit 1.28.0未満の場合の代替実装
                         answer_placeholder = st.empty()
                         full_answer = ""
+                        # 会話履歴を取得（直前の2-3件）
+                        conversation_history = st.session_state.messages[-3:] if len(st.session_state.messages) > 0 else []
+                        
                         for chunk in st.session_state.ai_chat.ask_stream(
                             question,
                             model=st.session_state.model,
-                            site_name=st.session_state.selected_site
+                            site_name=st.session_state.selected_site,
+                            conversation_history=conversation_history
                         ):
                             if chunk.startswith("[STEP]"):
                                 step_messages.append(chunk)
@@ -500,10 +508,14 @@ if prompt := st.chat_input(chat_placeholder):
                     
                     # ストリーミング応答を処理
                     try:
+                        # 会話履歴を取得（直前の2-3件）
+                        conversation_history = st.session_state.messages[-3:] if len(st.session_state.messages) > 0 else []
+                        
                         for chunk in st.session_state.ai_chat.ask_stream(
                             question,
                             model=st.session_state.model,
-                            site_name=st.session_state.selected_site
+                            site_name=st.session_state.selected_site,
+                            conversation_history=conversation_history
                         ):
                             # ステップメッセージかAI応答かを判定
                             if chunk.startswith("[STEP]"):
@@ -527,10 +539,14 @@ if prompt := st.chat_input(chat_placeholder):
                         # Streamlit 1.28.0未満の場合の代替実装
                         answer_placeholder = st.empty()
                         full_answer = ""
+                        # 会話履歴を取得（直前の2-3件）
+                        conversation_history = st.session_state.messages[-3:] if len(st.session_state.messages) > 0 else []
+                        
                         for chunk in st.session_state.ai_chat.ask_stream(
                             question,
                             model=st.session_state.model,
-                            site_name=st.session_state.selected_site
+                            site_name=st.session_state.selected_site,
+                            conversation_history=conversation_history
                         ):
                             if chunk.startswith("[STEP]"):
                                 step_messages.append(chunk)

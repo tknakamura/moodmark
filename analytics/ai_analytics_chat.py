@@ -64,50 +64,53 @@ class AIAnalyticsChat:
         self.system_prompt = """あなたはGoogle Analytics 4 (GA4)、Google Search Console (GSC)、およびSEO分析の専門家です。
 ユーザーの質問に対して、提供されたデータを基に、わかりやすく、実用的なアドバイスを提供してください。
 
+【質問の意図を理解し、適切に回答する】
+- 質問の種類（SEO改善、商品提案、データ分析、年次比較など）を自動的に判断してください
+- 質問の意図に応じて、適切な回答形式と含めるべき情報を柔軟に選択してください
+- 例：
+  * 商品提案の質問 → 商品カテゴリ、具体的な商品名、掲載理由を提案
+  * SEO改善の質問 → 現状分析、課題整理、改善提案の3段階構造
+  * データ分析の質問 → 数値の説明、トレンド分析、インサイト
+  * 年次比較の質問 → 昨年と今年の比較、増減率、原因分析
+
+【データの活用】
+- 提供されたデータ（GA4、GSC、SEO分析）を最大限に活用してください
+- データがない場合は、その旨を明記してください
+- データ取得エラーがある場合は、エラーの内容を説明してください
+- データ取得状態が「✗ 取得失敗」と表示されている場合は、そのデータは利用できないことを理解してください
+
+【回答の構造】
+- 質問の種類に応じて、適切な構造で回答してください
+- 数値は必ず具体的に示してください
+- 専門用語を使う場合は簡潔に説明してください
+- 日本語で回答してください
+
 【SEO改善に関する回答の構造】
-SEO改善に関する質問には、必ず以下の3段階の構造で回答してください：
+SEO改善に関する質問には、以下の3段階の構造で回答することを推奨します：
 
 1. 【現状分析】
    - 現在のSEO要素の状態を数値と共に明確に示す
    - タイトル、ディスクリプション、見出し構造、画像alt属性、構造化データなどの現状を分析
    - 最適値との比較を示す（例：タイトルは45文字で、最適範囲30-60文字内）
-   - **重要**: H2/H3の見出しテキストが提供されている場合は、具体的な見出しテキストを列挙し、その内容を分析してください
+   - H2/H3の見出しテキストが提供されている場合は、具体的な見出しテキストを列挙し、その内容を分析してください
    - 見出しテキストの品質評価（長さ、キーワード含有率、重複など）を具体的に示してください
 
 2. 【課題整理】
    - 現状分析から見つかった問題点を整理
    - 優先度の高い課題から順に列挙
    - 各課題がSEOに与える影響を説明
-   - **重要**: 見出しテキストの問題（長すぎる/短すぎる、重複、キーワード含有率の低さなど）を具体的に指摘してください
 
 3. 【改善提案】
    - 各課題に対する具体的な改善方法を提示
    - 実装可能な具体的な改善案を提示（例：タイトルの改善案、ディスクリプションの改善案）
-   - **重要**: 見出しテキストの改善提案では、具体的な見出しテキストの改善案を提示してください
-   - 長すぎる見出しの短縮案、短すぎる見出しの拡充案、重複見出しの統合案などを具体的に示してください
-   - キーワード含有率を向上させるための見出しテキストの改善案を提示してください
+   - 見出しテキストの改善提案では、具体的な見出しテキストの改善案を提示してください
    - 優先順位をつけて改善すべき順序を提示
 
 【コンテンツSEOにおける見出し構造の重要性】
 - 見出し構造（H1、H2、H3）はコンテンツSEOにおいて極めて重要です
 - 見出しテキストは検索エンジンがコンテンツの構造と内容を理解するための重要な手がかりです
 - H2/H3の見出しテキストは、具体的に列挙し、その品質を評価してください
-- 見出しテキストの長さ、キーワード含有率、重複などの問題を具体的に指摘し、改善案を提示してください
-
-【データに基づいた回答の重要性】
-- GSC/GA4データが提供されている場合は、必ずそのデータを使用して回答してください
-- 年次比較データが提供されている場合は、昨年と今年の数値を比較して分析してください
-- 特定ページのデータが提供されている場合は、そのページの具体的な数値を示してください
-- データがない場合は、データが取得できなかった旨を明記してください
-
-【一般的な回答の注意点】
-- データは数値で正確に示す
-- トレンドや変化を明確に説明する
-- 専門用語を使う場合は簡潔に説明する
-- 日本語で回答する
-- SEO改善以外の質問でも、可能な限り構造化して回答する
-- 見出しテキストが提供されている場合は、必ず具体的な見出しテキストを回答に含めてください
-- GSC/GA4データが提供されている場合は、SEO分析だけでなく、実際のトラフィックデータも分析してください"""
+- 見出しテキストの長さ、キーワード含有率、重複などの問題を具体的に指摘し、改善案を提示してください"""
     
     def _extract_date_range(self, question: str) -> tuple:
         """
@@ -586,6 +589,14 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
         
         context_parts = []
         
+        # データ取得状態を追跡
+        data_status = {
+            'seo_analysis': False,
+            'ga4_data': False,
+            'gsc_data': False,
+            'gsc_page_specific': False
+        }
+        
         # URLを抽出
         urls = self._extract_urls(question)
         logger.info(f"抽出されたURL: {urls}")
@@ -712,6 +723,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                     logger.info(f"    文字数: {content.get('char_count', 0):,}")
                     
                     if 'error' not in seo_analysis:
+                        data_status['seo_analysis'] = True
                         context_parts.append(f"=== SEO分析結果: {url} ===")
                         context_parts.append("")
                         
@@ -1145,6 +1157,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             )
             
             if 'error' not in page_gsc_data:
+                data_status['gsc_page_specific'] = True
                 clicks = page_gsc_data.get('clicks', 0)
                 impressions = page_gsc_data.get('impressions', 0)
                 
@@ -1169,16 +1182,39 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 context_parts.append("")
             elif 'error' in page_gsc_data:
                 error_msg = page_gsc_data.get('error', 'Unknown error')
+                error_code = page_gsc_data.get('error_code', '')
                 logger.warning(f"特定ページのGSCデータ取得エラー: {error_msg}")
                 context_parts.append(f"=== 特定ページのGSCデータ: {urls[0]} ===")
                 context_parts.append(f"❌ エラー: {error_msg}")
                 context_parts.append("")
-                context_parts.append("【考えられる原因】")
-                context_parts.append("- ページがまだGSCに登録されていない")
-                context_parts.append("- 指定された期間にデータが存在しない")
-                context_parts.append("- ページURLが正しくない")
-                context_parts.append("- GSC APIの認証エラー")
-                context_parts.append("")
+                
+                # 403エラーの場合、より詳細な説明を追加
+                if error_code == 403 or '403' in str(error_msg) or 'permission' in str(error_msg).lower() or 'forbidden' in str(error_msg).lower():
+                    context_parts.append("【GSC権限エラーの対処方法】")
+                    context_parts.append(f"1. Google Search Consoleで、サイト '{site_name}' のプロパティを開く")
+                    context_parts.append("2. 設定 > ユーザーと権限 に移動")
+                    context_parts.append("3. サービスアカウントのメールアドレスを追加し、'所有者'または'編集者'権限を付与")
+                    # サービスアカウントのメールアドレスを取得
+                    try:
+                        if self.google_apis.credentials and hasattr(self.google_apis.credentials, 'service_account_email'):
+                            service_account_email = self.google_apis.credentials.service_account_email
+                            context_parts.append(f"4. サービスアカウントのメールアドレス: {service_account_email}")
+                        elif self.google_apis.credentials and hasattr(self.google_apis.credentials, '_service_account_email'):
+                            service_account_email = self.google_apis.credentials._service_account_email
+                            context_parts.append(f"4. サービスアカウントのメールアドレス: {service_account_email}")
+                        else:
+                            context_parts.append("4. サービスアカウントのメールアドレスは認証情報から取得できませんでした")
+                    except Exception as e:
+                        logger.debug(f"サービスアカウントメールアドレスの取得エラー: {e}")
+                        context_parts.append("4. サービスアカウントのメールアドレスは認証情報から取得できませんでした")
+                    context_parts.append("")
+                else:
+                    context_parts.append("【考えられる原因】")
+                    context_parts.append("- ページがまだGSCに登録されていない")
+                    context_parts.append("- 指定された期間にデータが存在しない")
+                    context_parts.append("- ページURLが正しくない")
+                    context_parts.append("- GSC APIの認証エラー")
+                    context_parts.append("")
         
         if needs_ga4:
             logger.info(f"GA4データが必要と判定されました。取得を開始...")
@@ -1188,6 +1224,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             page_url_for_ga4 = urls[0] if urls else None
             ga4_summary = self._get_ga4_summary(date_range, start_date, end_date, page_url=page_url_for_ga4)
             if "error" not in ga4_summary:
+                data_status['ga4_data'] = True
                 is_page_specific = ga4_summary.get('is_page_specific', False)
                 if is_page_specific:
                     logger.info(f"個別ページのGA4データ取得成功: セッション={ga4_summary['total_sessions']:,}, ユーザー={ga4_summary['total_users']:,}, PV={ga4_summary['total_pageviews']:,}")
@@ -1228,6 +1265,7 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 progress_callback("[STEP] 📊 GSCデータを取得中...\n")
             gsc_summary = self._get_gsc_summary(date_range, start_date, end_date, site_name=site_name)
             if "error" not in gsc_summary:
+                data_status['gsc_data'] = True
                 context_parts.append("=== Google Search Console (GSC) データ ===")
                 if start_date and end_date:
                     context_parts.append(f"期間: {start_date} ～ {end_date}")
@@ -1251,11 +1289,36 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             else:
                 # エラーが発生した場合もコンテキストに含める
                 error_msg = gsc_summary.get('error', 'Unknown error')
+                error_code = gsc_summary.get('error_code', '')
                 logger.warning(f"GSCデータ取得エラー: {error_msg}")
                 context_parts.append("=== Google Search Console (GSC) データ ===")
                 context_parts.append(f"❌ エラー: {error_msg}")
-                context_parts.append(f"GSCデータが取得できませんでした（サイト: {site_name}）。認証状態とAPI接続を確認してください。")
-                context_parts.append("")
+                context_parts.append(f"GSCデータが取得できませんでした（サイト: {site_name}）。")
+                
+                # 403エラーの場合、より詳細な説明を追加
+                if error_code == 403 or '403' in str(error_msg) or 'permission' in str(error_msg).lower() or 'forbidden' in str(error_msg).lower():
+                    context_parts.append("")
+                    context_parts.append("【GSC権限エラーの対処方法】")
+                    context_parts.append(f"1. Google Search Consoleで、サイト '{site_name}' のプロパティを開く")
+                    context_parts.append("2. 設定 > ユーザーと権限 に移動")
+                    context_parts.append("3. サービスアカウントのメールアドレスを追加し、'所有者'または'編集者'権限を付与")
+                    # サービスアカウントのメールアドレスを取得
+                    try:
+                        if self.google_apis.credentials and hasattr(self.google_apis.credentials, 'service_account_email'):
+                            service_account_email = self.google_apis.credentials.service_account_email
+                            context_parts.append(f"4. サービスアカウントのメールアドレス: {service_account_email}")
+                        elif self.google_apis.credentials and hasattr(self.google_apis.credentials, '_service_account_email'):
+                            service_account_email = self.google_apis.credentials._service_account_email
+                            context_parts.append(f"4. サービスアカウントのメールアドレス: {service_account_email}")
+                        else:
+                            context_parts.append("4. サービスアカウントのメールアドレスは認証情報から取得できませんでした")
+                    except Exception as e:
+                        logger.debug(f"サービスアカウントメールアドレスの取得エラー: {e}")
+                        context_parts.append("4. サービスアカウントのメールアドレスは認証情報から取得できませんでした")
+                    context_parts.append("")
+                else:
+                    context_parts.append("認証状態とAPI接続を確認してください。")
+                    context_parts.append("")
         
         if not context_parts:
             # デフォルトで両方のデータを取得
@@ -1510,88 +1573,20 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             yield "[STEP] ✅ データ取得完了\n\n"
             yield "[STEP] 🤖 AI分析を開始しています...\n\n"
             
-            # 質問の種類を判定
-            is_yearly_comparison = any(keyword in question for keyword in [
-                "昨年", "去年", "前年", "year ago", "last year", "前年同期", "前年比", "年次比較"
-            ])
-            is_seo_question = any(keyword in question for keyword in [
-                "SEO", "seo", "改善", "最適化", "タイトル", "ディスクリプション", "見出し", "構造化データ"
-            ])
-            
-            # URLを抽出
-            import re
-            url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
-            urls = re.findall(url_pattern, question)
-            
-            # プロンプトを構築（ask()メソッドと同じ構造に統一）
-            if is_yearly_comparison:
-                user_prompt = f"""以下のデータを基に、ユーザーの質問に回答してください。
-
-**重要**: 年次比較データが提供されている場合は、必ず昨年と今年の数値を比較して分析してください。
-- クリック数、インプレッション数、CTR、平均検索順位の変化を具体的に示してください
-- 増減率を計算して、改善しているか悪化しているかを明確に示してください
-- 変化の原因を推測し、改善提案を提示してください
-
-質問: {question}
+            # シンプルで柔軟なプロンプトに統一
+            user_prompt = f"""以下のデータを基に、ユーザーの質問に回答してください。
 
 データ:
 {data_context}
 
-回答には以下を含めてください:
-- 昨年と今年の数値の比較
-- 増減率の計算
-- 変化の分析と原因の推測
-- 改善提案（該当する場合）
-- わかりやすい日本語で説明"""
-            elif is_seo_question:
-                user_prompt = f"""以下のSEO分析データを基に、ユーザーの質問に回答してください。
-
-**重要**: 提供されたデータには、GSC（Google Search Console）とGA4（Google Analytics 4）の数値が含まれています。
-- 必ずこれらの数値（クリック数、インプレッション数、CTR、平均検索順位、セッション数、ユーザー数、ページビュー数など）を具体的に示してください
-- 数値は必ず含めて分析してください
-
-{data_context}
-
 ユーザーの質問: {question}
 
-【回答形式】
-必ず以下の3段階の構造で回答してください：
-
-1. 【現状分析】
-   - 現在のSEO要素の状態を数値と共に明確に示す
-   - **GSCデータ（クリック数、インプレッション数、CTR、平均検索順位）を必ず含める**
-   - **GA4データ（セッション数、ユーザー数、ページビュー数、バウンス率、平均セッション時間）を必ず含める**
-   - 最適値との比較を示す
-   - 各要素の現状を整理
-
-2. 【課題整理】
-   - 現状分析から見つかった問題点を優先度順に整理
-   - 各課題がSEOに与える影響を説明
-   - 緊急度・重要度を考慮
-
-3. 【改善提案】
-   - 各課題に対する具体的な改善方法を提示
-   - 実装可能な具体的な改善案を提示（例：タイトルの改善案、ディスクリプションの改善案）
-   - 優先順位をつけて改善すべき順序を提示
-   - 可能であれば、改善前後の比較も示す
-
-わかりやすい日本語で、具体的な数値と共に説明してください。"""
-            else:
-                user_prompt = f"""以下のデータを基に、ユーザーの質問に回答してください。
-
-**重要**: 提供されたデータには、GSC（Google Search Console）とGA4（Google Analytics 4）の数値が含まれています。
-- 必ずこれらの数値（クリック数、インプレッション数、CTR、平均検索順位、セッション数、ユーザー数、ページビュー数など）を具体的に示してください
-- 数値は必ず含めて分析してください
-
-{data_context}
-
-ユーザーの質問: {question}
-
-回答は以下の点を含めてください：
-- データの要約
-- **重要な数値の説明（GSC/GA4の数値を必ず含める）**
-- 改善提案やアドバイス（該当する場合）
-- わかりやすい日本語で説明"""
+質問の意図を理解し、適切な回答形式と含めるべき情報を選択して回答してください。
+- 提供されたデータを最大限に活用してください
+- データがない場合は、その旨を明記してください
+- 質問の種類に応じて、適切な構造で回答してください
+- 数値は必ず具体的に示してください
+- わかりやすい日本語で説明してください"""
             
             # OpenAI APIをストリーミングモードで呼び出し
             logger.info(f"OpenAI APIをストリーミングモードで呼び出し中... (モデル: {model})")
