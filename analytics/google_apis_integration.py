@@ -407,7 +407,8 @@ class GoogleAPIsIntegration:
             }
             
             logger.info(f"Page Speed Insights API呼び出し: {url} (strategy: {strategy})")
-            response = requests.get(api_url, params=params, timeout=30)
+            # Page Speed Insights APIは処理に時間がかかるため、タイムアウトを60秒に設定
+            response = requests.get(api_url, params=params, timeout=60)
             response.raise_for_status()
             
             data = response.json()
