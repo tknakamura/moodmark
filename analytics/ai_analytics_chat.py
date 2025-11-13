@@ -271,17 +271,18 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             logger.info(f"GA4データ取得開始: 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
             
             # 基本的なメトリクスを取得
+            # GA4 APIでは 'users' ではなく 'activeUsers'、'pageviews' ではなく 'screenPageViews' を使用
             if start_date and end_date:
                 ga4_data = self.google_apis.get_ga4_data_custom_range(
                     start_date=start_date,
                     end_date=end_date,
-                    metrics=['sessions', 'users', 'pageviews', 'bounceRate', 'averageSessionDuration'],
+                    metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
                     dimensions=['date']
                 )
             else:
                 ga4_data = self.google_apis.get_ga4_data(
                     date_range_days=date_range_days,
-                    metrics=['sessions', 'users', 'pageviews', 'bounceRate', 'averageSessionDuration'],
+                    metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
                     dimensions=['date']
                 )
             
@@ -313,8 +314,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             
             summary = {
                 "total_sessions": int(ga4_data['sessions'].sum()) if 'sessions' in ga4_data.columns else 0,
-                "total_users": int(ga4_data['users'].sum()) if 'users' in ga4_data.columns else 0,
-                "total_pageviews": int(ga4_data['pageviews'].sum()) if 'pageviews' in ga4_data.columns else 0,
+                "total_users": int(ga4_data['activeUsers'].sum()) if 'activeUsers' in ga4_data.columns else 0,  # GA4 APIでは 'activeUsers' を使用
+                "total_pageviews": int(ga4_data['screenPageViews'].sum()) if 'screenPageViews' in ga4_data.columns else 0,  # GA4 APIでは 'screenPageViews' を使用
                 "avg_bounce_rate": float(ga4_data['bounceRate'].mean()) if 'bounceRate' in ga4_data.columns else 0,
                 "avg_session_duration": float(ga4_data['averageSessionDuration'].mean()) if 'averageSessionDuration' in ga4_data.columns else 0,
                 "date_range_days": date_range_days,

@@ -641,8 +641,8 @@ class GoogleAPIsIntegration:
         if not metrics:
             metrics = [
                 'sessions',
-                'users', 
-                'pageviews',
+                'activeUsers',  # GA4 APIでは 'users' ではなく 'activeUsers' を使用
+                'screenPageViews',  # GA4 APIでは 'pageviews' ではなく 'screenPageViews' を使用
                 'bounceRate',
                 'averageSessionDuration',
                 'conversions',
