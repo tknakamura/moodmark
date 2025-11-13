@@ -1497,7 +1497,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             logger.error(f"エラー詳細:\n{error_details}")
             raise  # エラーを再発生させて、UI側で処理
     
-    def ask_stream(self, question: str, model: str = "gpt-4o-mini", site_name: str = None) -> Generator[str, None, str]:
+    def ask_stream(self, question: str, model: str = "gpt-4o-mini", site_name: str = None, conversation_history: List[Dict] = None) -> Generator[str, None, str]:
         """
         AIに質問してストリーミング応答を取得（ジェネレータ）
         
@@ -1505,6 +1505,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             question (str): ユーザーの質問
             model (str): 使用するモデル名
             site_name (str): サイト名（'moodmark' または 'moodmarkgift'）
+            conversation_history (List[Dict]): 会話履歴（オプション）
         
         Yields:
             str: ストリーミング応答のチャンク
@@ -1573,10 +1574,23 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             yield "[STEP] ✅ データ取得完了\n\n"
             yield "[STEP] 🤖 AI分析を開始しています...\n\n"
             
+            # 会話履歴をコンテキストに含める（オプション）
+            conversation_context = ""
+            if conversation_history and len(conversation_history) > 0:
+                conversation_context = "\n=== 会話履歴 ===\n"
+                # 直近の2-3件の会話をコンテキストに含める
+                for msg in conversation_history[-3:]:
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')
+                    # 長すぎる場合は省略
+                    content_preview = content[:200] + "..." if len(content) > 200 else content
+                    conversation_context += f"{role}: {content_preview}\n"
+                conversation_context += "\n"
+            
             # シンプルで柔軟なプロンプトに統一
             user_prompt = f"""以下のデータを基に、ユーザーの質問に回答してください。
 
-データ:
+{conversation_context}データ:
 {data_context}
 
 ユーザーの質問: {question}
