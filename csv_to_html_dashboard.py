@@ -84,7 +84,7 @@ def login_page():
     # マルチページへのリンク
     st.markdown("---")
     st.markdown("### 📊 その他のページ")
-    if st.button("📊 GA4/GSC AI分析チャット", use_container_width=True):
+    if st.button("📊 GA4/GSC AI分析チャット", use_container_width=True, key="login_page_analytics_chat_button"):
         st.switch_page("pages/analytics_chat.py")
 
 class CSVToHTMLConverter:
@@ -861,7 +861,7 @@ def main():
         st.markdown("")
         
         # 他のダッシュボードへのリンク
-        if st.button("📊 GA4/GSC AI分析チャット", use_container_width=True):
+        if st.button("📊 GA4/GSC AI分析チャット", use_container_width=True, key="main_page_analytics_chat_button"):
             st.switch_page("pages/analytics_chat.py")
         
         st.markdown("---")
