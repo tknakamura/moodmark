@@ -1163,6 +1163,9 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
         
         # 特定ページのGSCデータ取得
         if needs_page_specific_analysis and urls:
+            import time
+            step_start_time = time.time()
+            check_timeout()  # タイムアウトチェック
             logger.info(f"特定ページのGSCデータを取得中: {urls[0]}")
             if progress_callback:
                 progress_callback("[STEP] 📊 GSCデータを取得中...\n")
