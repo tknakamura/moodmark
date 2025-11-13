@@ -382,20 +382,77 @@ if prompt := st.chat_input(chat_placeholder):
             urls_in_question.extend(re.findall(url_pattern, question))
             
             if urls_in_question:
-                # SEO分析実行中のステップ表示
+                # SEO分析実行中のステップ表示（改善版）
                 status_container = st.container()
                 with status_container:
                     st.info("🔍 SEO分析を実行中...")
-                    progress_steps = st.empty()
-                    progress_steps.markdown("📄 ページ取得中...")
+                    
+                    # プログレスバー
+                    progress_bar = st.progress(0)
+                    progress_text = st.empty()
+                    progress_details = st.empty()
+                    
+                    # ステップ定義
+                    steps = [
+                        ("📄 ページ取得中...", "ページをダウンロードしています"),
+                        ("🔍 HTML解析中...", "ページ構造を解析しています"),
+                        ("📊 SEO分析中...", "SEO要素を分析しています"),
+                        ("📈 データ取得中...", "GA4/GSCデータを取得しています"),
+                        ("🤖 AI分析中...", "AIが分析結果を生成しています")
+                    ]
+                    
+                    # 進捗を更新するコールバック関数（簡易版）
+                    def update_progress(step_index, detail=""):
+                        progress = (step_index + 1) / len(steps)
+                        progress_bar.progress(progress)
+                        if step_index < len(steps):
+                            step_name, default_detail = steps[step_index]
+                            progress_text.markdown(f"**{step_name}**")
+                            if detail:
+                                progress_details.caption(f"💡 {detail}")
+                            else:
+                                progress_details.caption(f"💡 {default_detail}")
+                    
+                    # 初期表示
+                    update_progress(0)
                 
                 try:
+                    # 非同期で進捗を更新（簡易版：タイマーベース）
+                    import time
+                    import threading
+                    
+                    progress_index = [0]
+                    stop_progress = [False]
+                    
+                    def progress_updater():
+                        while not stop_progress[0] and progress_index[0] < len(steps) - 1:
+                            time.sleep(2)  # 2秒ごとに更新
+                            if not stop_progress[0]:
+                                progress_index[0] += 1
+                                if progress_index[0] < len(steps):
+                                    update_progress(progress_index[0])
+                    
+                    progress_thread = threading.Thread(target=progress_updater, daemon=True)
+                    progress_thread.start()
+                    
                     answer = st.session_state.ai_chat.ask(
                         question,
                         model=st.session_state.model,
                         site_name=st.session_state.selected_site
                     )
-                    progress_steps.empty()
+                    
+                    # 進捗更新を停止
+                    stop_progress[0] = True
+                    
+                    # 完了表示
+                    progress_bar.progress(1.0)
+                    progress_text.markdown("**✅ 分析完了！**")
+                    progress_details.caption("🎉 結果を表示しています...")
+                    time.sleep(0.5)  # 完了メッセージを少し表示
+                    
+                    progress_bar.empty()
+                    progress_text.empty()
+                    progress_details.empty()
                     status_container.empty()
                     
                     # AI回答を表示
@@ -411,8 +468,17 @@ if prompt := st.chat_input(chat_placeholder):
                     st.caption(f"🕐 {answer_timestamp}")
                     
                 except Exception as e:
-                    progress_steps.empty()
-                    status_container.empty()
+                    # 進捗更新を停止
+                    if 'stop_progress' in locals():
+                        stop_progress[0] = True
+                    if 'progress_bar' in locals():
+                        progress_bar.empty()
+                    if 'progress_text' in locals():
+                        progress_text.empty()
+                    if 'progress_details' in locals():
+                        progress_details.empty()
+                    if 'status_container' in locals():
+                        status_container.empty()
                     
                     import traceback
                     error_details = traceback.format_exc()
@@ -450,13 +516,70 @@ if prompt := st.chat_input(chat_placeholder):
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     })
             else:
-                # 通常の分析
-                with st.spinner("🤔 データを分析中..."):
+                # 通常の分析（プログレスバー付き）
+                status_container = st.container()
+                with status_container:
+                    st.info("📊 データ分析を実行中...")
+                    
+                    # プログレスバー
+                    progress_bar = st.progress(0)
+                    progress_text = st.empty()
+                    progress_details = st.empty()
+                    
+                    # ステップ定義
+                    steps = [
+                        ("📈 データ取得中...", "GA4/GSCデータを取得しています"),
+                        ("🔍 データ分析中...", "データを分析しています"),
+                        ("🤖 AI分析中...", "AIが分析結果を生成しています")
+                    ]
+                    
+                    def update_progress(step_index, detail=""):
+                        progress = (step_index + 1) / len(steps)
+                        progress_bar.progress(progress)
+                        if step_index < len(steps):
+                            step_name, default_detail = steps[step_index]
+                            progress_text.markdown(f"**{step_name}**")
+                            if detail:
+                                progress_details.caption(f"💡 {detail}")
+                            else:
+                                progress_details.caption(f"💡 {default_detail}")
+                    
+                    update_progress(0)
+                    
+                    import time
+                    import threading
+                    
+                    progress_index = [0]
+                    stop_progress = [False]
+                    
+                    def progress_updater():
+                        while not stop_progress[0] and progress_index[0] < len(steps) - 1:
+                            time.sleep(1.5)
+                            if not stop_progress[0]:
+                                progress_index[0] += 1
+                                if progress_index[0] < len(steps):
+                                    update_progress(progress_index[0])
+                    
+                    progress_thread = threading.Thread(target=progress_updater, daemon=True)
+                    progress_thread.start()
+                    
                     try:
                         answer = st.session_state.ai_chat.ask(
                             question,
-                            model=st.session_state.model
+                            model=st.session_state.model,
+                            site_name=st.session_state.selected_site
                         )
+                        
+                        stop_progress[0] = True
+                        progress_bar.progress(1.0)
+                        progress_text.markdown("**✅ 分析完了！**")
+                        progress_details.caption("🎉 結果を表示しています...")
+                        time.sleep(0.5)
+                        
+                        progress_bar.empty()
+                        progress_text.empty()
+                        progress_details.empty()
+                        status_container.empty()
                         
                         # AI回答を表示
                         st.markdown(answer)
@@ -471,6 +594,11 @@ if prompt := st.chat_input(chat_placeholder):
                         st.caption(f"🕐 {answer_timestamp}")
                         
                     except Exception as e:
+                        stop_progress[0] = True
+                        progress_bar.empty()
+                        progress_text.empty()
+                        progress_details.empty()
+                        status_container.empty()
                         import traceback
                         error_details = traceback.format_exc()
                         
