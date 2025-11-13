@@ -38,10 +38,22 @@ Render.comで環境変数を設定する方法を説明します。
 - **Value**: あなたのOpenAI APIキー（例: `sk-...`）
 - **重要**: APIキーは機密情報なので、他人に共有しないでください
 
-#### 環境変数2: GOOGLE_CREDENTIALS_FILE
+#### 環境変数2: GOOGLE_CREDENTIALS_JSON（推奨）
+
+- **Key**: `GOOGLE_CREDENTIALS_JSON`
+- **Value**: Google認証ファイル（JSON）の内容をそのまま貼り付け
+  - 認証ファイル（`config/google-credentials-474807.json`）を開く
+  - ファイルの内容全体をコピー
+  - 環境変数のValueに貼り付け（改行を含む完全なJSON）
+  - **重要**: JSONの内容をそのまま貼り付けてください（1行にまとめる必要はありません）
+
+**または**
+
+#### 環境変数2: GOOGLE_CREDENTIALS_FILE（代替方法）
 
 - **Key**: `GOOGLE_CREDENTIALS_FILE`
 - **Value**: `config/google-credentials-474807.json`
+- **注意**: この方法を使用する場合は、認証ファイルをリポジトリに含めるか、Render.comにアップロードする必要があります
 
 #### 環境変数3: GA4_PROPERTY_ID
 

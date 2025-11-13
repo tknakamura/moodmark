@@ -41,7 +41,29 @@ class GoogleAPIsIntegration:
     def _authenticate(self):
         """Google APIs認証"""
         try:
-            if self.credentials_file and os.path.exists(self.credentials_file):
+            # 方法1: 環境変数からJSONを直接読み込む（Render.com推奨）
+            google_credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+            if google_credentials_json:
+                try:
+                    credentials_info = json.loads(google_credentials_json)
+                    self.credentials = service_account.Credentials.from_service_account_info(
+                        credentials_info,
+                        scopes=[
+                            'https://www.googleapis.com/auth/analytics.readonly',
+                            'https://www.googleapis.com/auth/webmasters.readonly',
+                            'https://www.googleapis.com/auth/drive',
+                            'https://www.googleapis.com/auth/bigquery'
+                        ]
+                    )
+                    logger.info("環境変数GOOGLE_CREDENTIALS_JSONから認証情報を読み込みました")
+                except json.JSONDecodeError as e:
+                    logger.error(f"GOOGLE_CREDENTIALS_JSONのJSON解析エラー: {e}")
+                    return
+                except Exception as e:
+                    logger.error(f"環境変数からの認証情報読み込みエラー: {e}")
+                    return
+            # 方法2: 認証ファイルパスから読み込む
+            elif self.credentials_file and os.path.exists(self.credentials_file):
                 self.credentials = service_account.Credentials.from_service_account_file(
                     self.credentials_file,
                     scopes=[
@@ -51,8 +73,11 @@ class GoogleAPIsIntegration:
                         'https://www.googleapis.com/auth/bigquery'
                     ]
                 )
+                logger.info(f"認証ファイルから認証情報を読み込みました: {self.credentials_file}")
             else:
                 logger.warning("認証ファイルが見つかりません。環境変数を確認してください。")
+                logger.warning("  - GOOGLE_CREDENTIALS_JSON: JSON形式の認証情報（推奨）")
+                logger.warning(f"  - GOOGLE_CREDENTIALS_FILE: 認証ファイルのパス（現在: {self.credentials_file}）")
                 return
             
             # GA4 APIサービス構築
