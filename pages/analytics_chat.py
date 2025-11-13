@@ -102,6 +102,75 @@ with st.sidebar:
             st.info("設定を確認してください。")
     else:
         st.success("✅ AIチャット接続済み")
+        
+        # Google APIs接続状態の確認
+        st.markdown("---")
+        st.subheader("📊 Google APIs接続状態")
+        
+        # 認証状態の確認
+        auth_status = st.session_state.ai_chat.google_apis.check_authentication_status()
+        
+        # GA4接続状態
+        if auth_status['ga4_service_initialized'] and auth_status['ga4_property_id_set']:
+            st.success("✅ GA4: 接続済み")
+        else:
+            st.error("❌ GA4: 未接続")
+            if not auth_status['ga4_service_initialized']:
+                st.caption("GA4サービスが初期化されていません")
+            if not auth_status['ga4_property_id_set']:
+                st.caption("GA4_PROPERTY_IDが設定されていません")
+        
+        # GSC接続状態
+        if auth_status['gsc_service_initialized'] and auth_status['gsc_site_url_set']:
+            st.success("✅ GSC: 接続済み")
+        else:
+            st.error("❌ GSC: 未接続")
+            if not auth_status['gsc_service_initialized']:
+                st.caption("GSCサービスが初期化されていません")
+            if not auth_status['gsc_site_url_set']:
+                st.caption("GSC_SITE_URLが設定されていません")
+        
+        # エラーがある場合の表示
+        if auth_status['errors']:
+            with st.expander("⚠️ エラー詳細", expanded=False):
+                for error in auth_status['errors']:
+                    st.error(error)
+        
+        # 警告がある場合の表示
+        if auth_status['warnings']:
+            with st.expander("⚠️ 警告", expanded=False):
+                for warning in auth_status['warnings']:
+                    st.warning(warning)
+        
+        # 接続テストボタン
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔍 GA4接続テスト", use_container_width=True, key="test_ga4_button"):
+                with st.spinner("GA4接続をテスト中..."):
+                    test_result = st.session_state.ai_chat.google_apis.test_ga4_connection()
+                    if test_result['success']:
+                        st.success(test_result['message'])
+                        if test_result.get('data_sample'):
+                            st.caption(f"データサンプル: {test_result['data_sample']['row_count']}件 ({test_result['data_sample']['date_range']})")
+                    else:
+                        st.error(test_result['message'])
+                        if test_result.get('error'):
+                            st.caption(f"エラー: {test_result['error']}")
+        
+        with col2:
+            if st.button("🔍 GSC接続テスト", use_container_width=True, key="test_gsc_button"):
+                with st.spinner("GSC接続をテスト中..."):
+                    test_result = st.session_state.ai_chat.google_apis.test_gsc_connection()
+                    if test_result['success']:
+                        st.success(test_result['message'])
+                        if test_result.get('data_sample'):
+                            st.caption(f"データサンプル: {test_result['data_sample']['row_count']}件 ({test_result['data_sample']['date_range']})")
+                    else:
+                        st.error(test_result['message'])
+                        if test_result.get('error'):
+                            st.caption(f"エラー: {test_result['error']}")
     
     st.markdown("---")
     

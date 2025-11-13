@@ -10,6 +10,7 @@ import os
 import json
 import pandas as pd
 from datetime import datetime, timedelta
+from typing import Dict, Any
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -90,6 +91,215 @@ class GoogleAPIsIntegration:
             
         except Exception as e:
             logger.error(f"認証エラー: {e}")
+    
+    def check_authentication_status(self) -> Dict[str, Any]:
+        """
+        認証状態を確認し、診断情報を返す
+        
+        Returns:
+            dict: 認証状態の診断結果
+        """
+        status = {
+            'authenticated': False,
+            'ga4_service_initialized': False,
+            'gsc_service_initialized': False,
+            'credentials_loaded': False,
+            'ga4_property_id_set': False,
+            'gsc_site_url_set': False,
+            'errors': [],
+            'warnings': []
+        }
+        
+        # 認証情報の確認
+        if self.credentials:
+            status['credentials_loaded'] = True
+            status['authenticated'] = True
+        else:
+            status['errors'].append('認証情報が読み込まれていません')
+            # 環境変数の確認
+            if not os.getenv('GOOGLE_CREDENTIALS_JSON') and not os.getenv('GOOGLE_CREDENTIALS_FILE'):
+                status['errors'].append('GOOGLE_CREDENTIALS_JSONまたはGOOGLE_CREDENTIALS_FILEが設定されていません')
+            elif os.getenv('GOOGLE_CREDENTIALS_JSON'):
+                try:
+                    json.loads(os.getenv('GOOGLE_CREDENTIALS_JSON'))
+                except json.JSONDecodeError:
+                    status['errors'].append('GOOGLE_CREDENTIALS_JSONのJSON形式が不正です')
+            elif os.getenv('GOOGLE_CREDENTIALS_FILE'):
+                if not os.path.exists(os.getenv('GOOGLE_CREDENTIALS_FILE')):
+                    status['errors'].append(f'認証ファイルが見つかりません: {os.getenv("GOOGLE_CREDENTIALS_FILE")}')
+        
+        # GA4サービスの確認
+        if self.ga4_service:
+            status['ga4_service_initialized'] = True
+        else:
+            status['warnings'].append('GA4サービスが初期化されていません')
+        
+        # GSCサービスの確認
+        if self.gsc_service:
+            status['gsc_service_initialized'] = True
+        else:
+            status['warnings'].append('GSCサービスが初期化されていません')
+        
+        # GA4プロパティIDの確認
+        if self.ga4_property_id:
+            status['ga4_property_id_set'] = True
+        else:
+            status['errors'].append('GA4_PROPERTY_IDが設定されていません')
+        
+        # GSCサイトURLの確認
+        if self.gsc_site_url:
+            status['gsc_site_url_set'] = True
+        else:
+            status['errors'].append('GSC_SITE_URLが設定されていません')
+        
+        # 全体の認証状態
+        if status['authenticated'] and status['ga4_service_initialized'] and status['gsc_service_initialized']:
+            status['overall_status'] = 'success'
+        elif len(status['errors']) > 0:
+            status['overall_status'] = 'error'
+        else:
+            status['overall_status'] = 'warning'
+        
+        return status
+    
+    def test_ga4_connection(self) -> Dict[str, Any]:
+        """
+        GA4 APIへの接続をテスト
+        
+        Returns:
+            dict: テスト結果
+        """
+        result = {
+            'success': False,
+            'message': '',
+            'error': None,
+            'data_sample': None
+        }
+        
+        if not self.ga4_service:
+            result['error'] = 'GA4サービスが初期化されていません'
+            result['message'] = '認証が完了していない可能性があります。環境変数を確認してください。'
+            return result
+        
+        if not self.ga4_property_id:
+            result['error'] = 'GA4プロパティIDが設定されていません'
+            result['message'] = '環境変数GA4_PROPERTY_IDを設定してください。'
+            return result
+        
+        try:
+            # 過去7日間の簡単なデータ取得を試行
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+            
+            request = {
+                'requests': [{
+                    'property': f'properties/{self.ga4_property_id}',
+                    'dateRanges': [{'startDate': start_date, 'endDate': end_date}],
+                    'metrics': [{'name': 'sessions'}],
+                    'dimensions': [{'name': 'date'}],
+                    'limit': 10
+                }]
+            }
+            
+            logger.info(f"GA4接続テスト開始: プロパティID={self.ga4_property_id}")
+            response = self.ga4_service.properties().batchRunReports(
+                property=f'properties/{self.ga4_property_id}',
+                body=request
+            ).execute()
+            
+            # レスポンスの確認
+            if 'reports' in response and len(response['reports']) > 0:
+                report = response['reports'][0]
+                row_count = len(report.get('rows', []))
+                result['success'] = True
+                result['message'] = f'GA4接続成功: {row_count}件のデータを取得しました'
+                result['data_sample'] = {
+                    'row_count': row_count,
+                    'date_range': f'{start_date} ～ {end_date}'
+                }
+                logger.info(f"GA4接続テスト成功: {row_count}件のデータを取得")
+            else:
+                result['error'] = 'データが取得できませんでした'
+                result['message'] = 'API接続は成功しましたが、データが返されませんでした。'
+                logger.warning("GA4接続テスト: データが取得できませんでした")
+            
+        except HttpError as e:
+            error_details = json.loads(e.content.decode('utf-8')) if e.content else {}
+            error_reason = error_details.get('error', {}).get('message', str(e))
+            result['error'] = f'GA4 API エラー: {error_reason}'
+            result['message'] = f'GA4 APIへの接続に失敗しました: {error_reason}'
+            logger.error(f"GA4接続テストエラー: {error_reason}")
+        except Exception as e:
+            result['error'] = f'接続エラー: {str(e)}'
+            result['message'] = f'GA4への接続中にエラーが発生しました: {str(e)}'
+            logger.error(f"GA4接続テストエラー: {e}", exc_info=True)
+        
+        return result
+    
+    def test_gsc_connection(self) -> Dict[str, Any]:
+        """
+        GSC APIへの接続をテスト
+        
+        Returns:
+            dict: テスト結果
+        """
+        result = {
+            'success': False,
+            'message': '',
+            'error': None,
+            'data_sample': None
+        }
+        
+        if not self.gsc_service:
+            result['error'] = 'GSCサービスが初期化されていません'
+            result['message'] = '認証が完了していない可能性があります。環境変数を確認してください。'
+            return result
+        
+        if not self.gsc_site_url:
+            result['error'] = 'GSCサイトURLが設定されていません'
+            result['message'] = '環境変数GSC_SITE_URLを設定してください。'
+            return result
+        
+        try:
+            # 過去7日間の簡単なデータ取得を試行
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+            
+            request = {
+                'startDate': start_date,
+                'endDate': end_date,
+                'dimensions': ['date'],
+                'rowLimit': 10
+            }
+            
+            logger.info(f"GSC接続テスト開始: サイトURL={self.gsc_site_url}")
+            response = self.gsc_service.searchanalytics().query(
+                siteUrl=self.gsc_site_url,
+                body=request
+            ).execute()
+            
+            # レスポンスの確認
+            row_count = len(response.get('rows', []))
+            result['success'] = True
+            result['message'] = f'GSC接続成功: {row_count}件のデータを取得しました'
+            result['data_sample'] = {
+                'row_count': row_count,
+                'date_range': f'{start_date} ～ {end_date}'
+            }
+            logger.info(f"GSC接続テスト成功: {row_count}件のデータを取得")
+            
+        except HttpError as e:
+            error_details = json.loads(e.content.decode('utf-8')) if e.content else {}
+            error_reason = error_details.get('error', {}).get('message', str(e))
+            result['error'] = f'GSC API エラー: {error_reason}'
+            result['message'] = f'GSC APIへの接続に失敗しました: {error_reason}'
+            logger.error(f"GSC接続テストエラー: {error_reason}")
+        except Exception as e:
+            result['error'] = f'接続エラー: {str(e)}'
+            result['message'] = f'GSCへの接続中にエラーが発生しました: {str(e)}'
+            logger.error(f"GSC接続テストエラー: {e}", exc_info=True)
+        
+        return result
     
     def get_ga4_data(self, date_range_days=30, metrics=None, dimensions=None):
         """
@@ -181,10 +391,13 @@ class GoogleAPIsIntegration:
             return df
             
         except HttpError as e:
-            logger.error(f"GA4 API エラー: {e}")
+            error_details = json.loads(e.content.decode('utf-8')) if e.content else {}
+            error_reason = error_details.get('error', {}).get('message', str(e))
+            logger.error(f"GA4 API エラー: {error_reason}")
+            logger.error(f"  エラー詳細: {error_details}")
             return pd.DataFrame()
         except Exception as e:
-            logger.error(f"GA4データ取得エラー: {e}")
+            logger.error(f"GA4データ取得エラー: {e}", exc_info=True)
             return pd.DataFrame()
     
     def get_ga4_data_custom_range(self, start_date: str, end_date: str, metrics=None, dimensions=None):
@@ -343,10 +556,13 @@ class GoogleAPIsIntegration:
             return df
             
         except HttpError as e:
-            logger.error(f"GSC API エラー: {e}")
+            error_details = json.loads(e.content.decode('utf-8')) if e.content else {}
+            error_reason = error_details.get('error', {}).get('message', str(e))
+            logger.error(f"GSC API エラー: {error_reason}")
+            logger.error(f"  エラー詳細: {error_details}")
             return pd.DataFrame()
         except Exception as e:
-            logger.error(f"GSCデータ取得エラー: {e}")
+            logger.error(f"GSCデータ取得エラー: {e}", exc_info=True)
             return pd.DataFrame()
     
     def get_top_pages_gsc(self, date_range_days=30, limit=100):

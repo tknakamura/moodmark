@@ -216,6 +216,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             dict: サマリーデータ
         """
         try:
+            logger.info(f"GA4データ取得開始: 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
+            
             # 基本的なメトリクスを取得
             if start_date and end_date:
                 ga4_data = self.google_apis.get_ga4_data_custom_range(
@@ -231,8 +233,11 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                     dimensions=['date']
                 )
             
+            logger.info(f"GA4データ取得完了: {len(ga4_data)}行")
+            
             if ga4_data.empty:
-                return {"error": "データが取得できませんでした"}
+                logger.warning("GA4データが空です。認証状態とAPI接続を確認してください。")
+                return {"error": "データが取得できませんでした。認証状態とAPI接続を確認してください。"}
             
             summary = {
                 "total_sessions": int(ga4_data['sessions'].sum()) if 'sessions' in ga4_data.columns else 0,
@@ -243,6 +248,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 "date_range_days": date_range_days,
                 "data_points": len(ga4_data)
             }
+            
+            logger.info(f"GA4サマリー: セッション={summary['total_sessions']:,}, ユーザー={summary['total_users']:,}, PV={summary['total_pageviews']:,}")
             
             return summary
             
@@ -263,6 +270,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             dict: サマリーデータ
         """
         try:
+            logger.info(f"GSCデータ取得開始: 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
+            
             # GSCデータを取得
             if start_date and end_date:
                 gsc_data = self.google_apis._get_gsc_data_custom_range(
@@ -275,8 +284,11 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                     dimensions=['date', 'page', 'query']
                 )
             
+            logger.info(f"GSCデータ取得完了: {len(gsc_data)}行")
+            
             if gsc_data.empty:
-                return {"error": "データが取得できませんでした"}
+                logger.warning("GSCデータが空です。認証状態とAPI接続を確認してください。")
+                return {"error": "データが取得できませんでした。認証状態とAPI接続を確認してください。"}
             
             # ページ別データを取得
             if start_date and end_date:
@@ -319,6 +331,8 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
                 "top_queries_count": len(gsc_queries),
                 "date_range_days": date_range_days
             }
+            
+            logger.info(f"GSCサマリー: クリック={summary['total_clicks']:,}, インプレッション={summary['total_impressions']:,}, CTR={summary['avg_ctr']:.2f}%")
             
             # トップページとトップクエリの情報
             if not gsc_pages.empty:
