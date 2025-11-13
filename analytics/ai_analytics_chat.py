@@ -144,6 +144,54 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             logger.info(f"特定の月を検出: {year}年{month}月 ({start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')})")
             return (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), date_range_days)
         
+        # 特定の日付範囲を抽出（例: "11/1-11/7", "11月1日-11月7日"）
+        # パターン1: "11/1-11/7" 形式
+        date_range_match = re.search(r'(\d{1,2})/(\d{1,2})\s*[-~～]\s*(\d{1,2})/(\d{1,2})', question)
+        if date_range_match:
+            start_month = int(date_range_match.group(1))
+            start_day = int(date_range_match.group(2))
+            end_month = int(date_range_match.group(3))
+            end_day = int(date_range_match.group(4))
+            current_year = datetime.now().year
+            
+            try:
+                start_date = datetime(current_year, start_month, start_day)
+                end_date = datetime(current_year, end_month, end_day)
+                
+                if end_date < start_date:
+                    # 年をまたぐ場合（例: 12/25-1/5）
+                    end_date = datetime(current_year + 1, end_month, end_day)
+                
+                date_range_days = (end_date - start_date).days + 1
+                
+                logger.info(f"特定の日付範囲を検出: {start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')}")
+                return (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), date_range_days)
+            except ValueError as e:
+                logger.warning(f"日付範囲の解析エラー: {e}")
+        
+        # パターン2: "11月1日-11月7日" 形式
+        date_range_match2 = re.search(r'(\d{1,2})月\s*(\d{1,2})日\s*[-~～]\s*(\d{1,2})月\s*(\d{1,2})日', question)
+        if date_range_match2:
+            start_month = int(date_range_match2.group(1))
+            start_day = int(date_range_match2.group(2))
+            end_month = int(date_range_match2.group(3))
+            end_day = int(date_range_match2.group(4))
+            current_year = datetime.now().year
+            
+            try:
+                start_date = datetime(current_year, start_month, start_day)
+                end_date = datetime(current_year, end_month, end_day)
+                
+                if end_date < start_date:
+                    end_date = datetime(current_year + 1, end_month, end_day)
+                
+                date_range_days = (end_date - start_date).days + 1
+                
+                logger.info(f"特定の日付範囲を検出（日本語形式）: {start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')}")
+                return (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), date_range_days)
+            except ValueError as e:
+                logger.warning(f"日付範囲の解析エラー: {e}")
+        
         # 特定の月を抽出（例: "10月" - 今年を仮定）
         month_match = re.search(r'(\d{1,2})月', question_lower)
         if month_match and '年' not in question_lower:
@@ -936,12 +984,17 @@ SEO改善に関する質問には、必ず以下の3段階の構造で回答し�
             page_gsc_data = self.google_apis.get_page_specific_gsc_data(
                 page_url=urls[0],
                 date_range_days=date_range,
-                site_name=site_name
+                site_name=site_name,
+                start_date=start_date,
+                end_date=end_date
             )
             
             if 'error' not in page_gsc_data:
                 context_parts.append(f"=== 特定ページのGSCデータ: {urls[0]} ===")
-                context_parts.append(f"期間: 過去{date_range}日間")
+                if start_date and end_date:
+                    context_parts.append(f"期間: {start_date} ～ {end_date}")
+                else:
+                    context_parts.append(f"期間: 過去{date_range}日間")
                 context_parts.append(f"クリック数: {page_gsc_data.get('clicks', 0):,}")
                 context_parts.append(f"インプレッション数: {page_gsc_data.get('impressions', 0):,}")
                 context_parts.append(f"CTR: {page_gsc_data.get('ctr', 0):.2f}%")

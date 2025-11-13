@@ -855,14 +855,16 @@ class GoogleAPIsIntegration:
         
         return query_stats
     
-    def get_page_specific_gsc_data(self, page_url: str, date_range_days=30, site_name='moodmark'):
+    def get_page_specific_gsc_data(self, page_url: str, date_range_days=30, site_name='moodmark', start_date: str = None, end_date: str = None):
         """
         特定ページのGSCデータを取得
         
         Args:
             page_url (str): 分析するページのURL
-            date_range_days (int): 取得する日数
+            date_range_days (int): 取得する日数（start_date/end_dateが指定されていない場合に使用）
             site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
+            start_date (str): 開始日 (YYYY-MM-DD形式、オプション)
+            end_date (str): 終了日 (YYYY-MM-DD形式、オプション)
             
         Returns:
             dict: ページのGSCデータ（クリック数、インプレッション数、CTR、平均順位など）
@@ -881,15 +883,31 @@ class GoogleAPIsIntegration:
             parsed_url = urlparse(page_url)
             page_path = parsed_url.path
             
-            # GSCデータを取得（ページディメンションで）
-            gsc_data = self.get_gsc_data(
-                date_range_days=date_range_days,
-                dimensions=['page', 'date'],
-                row_limit=25000,
-                site_name=site_name
-            )
+            # カスタム日付範囲が指定されている場合はそれを使用、そうでなければdate_range_daysを使用
+            if start_date and end_date:
+                logger.info(f"カスタム日付範囲でGSCデータを取得: {start_date} ～ {end_date}")
+                result = self._get_gsc_data_custom_range(
+                    start_date=start_date,
+                    end_date=end_date,
+                    page_url=page_url,
+                    site_name=site_name
+                )
+                # _get_gsc_data_custom_rangeはpage_urlが指定されている場合はdictを返す
+                if isinstance(result, dict):
+                    return result
+                # DataFrameが返された場合（通常は発生しないが念のため）
+                gsc_data = result
+            else:
+                # GSCデータを取得（ページディメンションで）
+                gsc_data = self.get_gsc_data(
+                    date_range_days=date_range_days,
+                    dimensions=['page', 'date'],
+                    row_limit=25000,
+                    site_name=site_name
+                )
             
-            if gsc_data.empty:
+            # gsc_dataがDataFrameの場合の処理
+            if hasattr(gsc_data, 'empty') and gsc_data.empty:
                 logger.warning(f"ページ固有のGSCデータが見つかりませんでした: {page_path}")
                 return {
                     'page_url': page_url,
@@ -1095,6 +1113,13 @@ class GoogleAPIsIntegration:
             return pd.DataFrame() if not page_url else {'error': error_msg}
         
         try:
+            # page_urlが指定されている場合は、ページパスを抽出
+            page_path = None
+            if page_url:
+                from urllib.parse import urlparse
+                parsed_url = urlparse(page_url)
+                page_path = parsed_url.path
+            
             dimensions = ['page', 'date'] if page_url else ['page']
             request = {
                 'startDate': start_date,
@@ -1104,7 +1129,7 @@ class GoogleAPIsIntegration:
                 'startRow': 0
             }
             
-            logger.info(f"GSCデータ取得（カスタム範囲）: サイト={site_name}, URL={gsc_site_url}, 期間={start_date} ～ {end_date}")
+            logger.info(f"GSCデータ取得（カスタム範囲）: サイト={site_name}, URL={gsc_site_url}, 期間={start_date} ～ {end_date}, ページ={page_path or '全体'}")
             response = self.gsc_service.searchanalytics().query(
                 siteUrl=gsc_site_url,
                 body=request
@@ -1127,23 +1152,40 @@ class GoogleAPIsIntegration:
             
             df = pd.DataFrame(data)
             
-            if page_url:
+            if page_url and page_path:
                 # ページURLでフィルタリング
-                from urllib.parse import urlparse
-                parsed_url = urlparse(page_url)
-                page_path = parsed_url.path
                 page_data = df[df['page'].str.contains(page_path, case=False, na=False)]
                 
                 if page_data.empty:
-                    return {'error': f'ページ "{page_path}" のデータが見つかりませんでした'}
+                    logger.warning(f"ページ '{page_path}' のデータが見つかりませんでした")
+                    return {
+                        'page_url': page_url,
+                        'page_path': page_path,
+                        'clicks': 0,
+                        'impressions': 0,
+                        'ctr': 0.0,
+                        'avg_position': 0.0,
+                        'error': f'ページ "{page_path}" のデータが見つかりませんでした'
+                    }
                 
                 total_clicks = page_data['clicks'].sum()
                 total_impressions = page_data['impressions'].sum()
+                avg_ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0.0
+                avg_position = page_data['position'].mean()
+                
+                logger.info(f"ページ固有のGSCデータ取得完了（カスタム範囲）: {page_path}")
+                logger.info(f"  クリック数: {total_clicks:,}, インプレッション数: {total_impressions:,}")
+                logger.info(f"  CTR: {avg_ctr:.2f}%, 平均順位: {avg_position:.2f}")
+                
                 return {
+                    'page_url': page_url,
+                    'page_path': page_path,
                     'clicks': int(total_clicks),
                     'impressions': int(total_impressions),
-                    'ctr': round((total_clicks / total_impressions * 100) if total_impressions > 0 else 0, 2),
-                    'avg_position': round(page_data['position'].mean(), 2)
+                    'ctr': round(avg_ctr, 2),
+                    'avg_position': round(avg_position, 2),
+                    'start_date': start_date,
+                    'end_date': end_date
                 }
             
             return df
