@@ -36,6 +36,7 @@ class GoogleAPIsIntegration:
         # 環境変数から設定を取得
         self.ga4_property_id = os.getenv('GA4_PROPERTY_ID')
         self.gsc_site_url = os.getenv('GSC_SITE_URL')
+        self.pagespeed_api_key = os.getenv('PAGESPEED_INSIGHTS_API_KEY')
         
         self._authenticate()
     
@@ -352,6 +353,138 @@ class GoogleAPIsIntegration:
             logger.error(f"GSC接続テストエラー: {e}", exc_info=True)
         
         return result
+    
+    def get_pagespeed_insights(self, url: str, strategy: str = 'mobile') -> Dict[str, Any]:
+        """
+        Page Speed Insights APIからパフォーマンスデータを取得
+        
+        Args:
+            url (str): 分析するURL
+            strategy (str): 分析戦略 ('mobile' または 'desktop')
+            
+        Returns:
+            dict: Page Speed Insightsの結果
+        """
+        if not self.pagespeed_api_key:
+            logger.warning("PAGESPEED_INSIGHTS_API_KEYが設定されていません")
+            return {
+                'error': 'PAGESPEED_INSIGHTS_API_KEYが設定されていません',
+                'url': url
+            }
+        
+        try:
+            import requests
+            
+            api_url = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed'
+            params = {
+                'url': url,
+                'key': self.pagespeed_api_key,
+                'strategy': strategy,
+                'category': ['PERFORMANCE', 'ACCESSIBILITY', 'BEST_PRACTICES', 'SEO']
+            }
+            
+            logger.info(f"Page Speed Insights API呼び出し: {url} (strategy: {strategy})")
+            response = requests.get(api_url, params=params, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # データを整形
+            result = {
+                'url': url,
+                'strategy': strategy,
+                'fetchTime': data.get('loadingExperience', {}).get('metrics', {}).get('FIRST_CONTENTFUL_PAINT_MS', {}).get('percentile', 0),
+                'lighthouseResult': {}
+            }
+            
+            if 'lighthouseResult' in data:
+                lhr = data['lighthouseResult']
+                result['lighthouseResult'] = {
+                    'categories': {},
+                    'audits': {}
+                }
+                
+                # カテゴリスコア
+                if 'categories' in lhr:
+                    for category_name, category_data in lhr['categories'].items():
+                        result['lighthouseResult']['categories'][category_name] = {
+                            'score': category_data.get('score', 0) * 100 if category_data.get('score') else 0,
+                            'title': category_data.get('title', '')
+                        }
+                
+                # 主要な監査項目
+                if 'audits' in lhr:
+                    important_audits = [
+                        'first-contentful-paint',
+                        'largest-contentful-paint',
+                        'total-blocking-time',
+                        'cumulative-layout-shift',
+                        'speed-index',
+                        'interactive',
+                        'server-response-time'
+                    ]
+                    
+                    for audit_key in important_audits:
+                        if audit_key in lhr['audits']:
+                            audit = lhr['audits'][audit_key]
+                            result['lighthouseResult']['audits'][audit_key] = {
+                                'title': audit.get('title', ''),
+                                'description': audit.get('description', ''),
+                                'score': audit.get('score'),
+                                'numericValue': audit.get('numericValue'),
+                                'displayValue': audit.get('displayValue', ''),
+                                'details': audit.get('details', {})
+                            }
+            
+            # Core Web Vitals
+            if 'loadingExperience' in data:
+                loading_exp = data['loadingExperience']
+                result['coreWebVitals'] = {}
+                
+                if 'metrics' in loading_exp:
+                    metrics = loading_exp['metrics']
+                    
+                    # LCP (Largest Contentful Paint)
+                    if 'LARGEST_CONTENTFUL_PAINT_MS' in metrics:
+                        lcp = metrics['LARGEST_CONTENTFUL_PAINT_MS']
+                        result['coreWebVitals']['LCP'] = {
+                            'percentile': lcp.get('percentile', 0),
+                            'category': lcp.get('category', 'UNKNOWN')
+                        }
+                    
+                    # FID (First Input Delay)
+                    if 'FIRST_INPUT_DELAY_MS' in metrics:
+                        fid = metrics['FIRST_INPUT_DELAY_MS']
+                        result['coreWebVitals']['FID'] = {
+                            'percentile': fid.get('percentile', 0),
+                            'category': fid.get('category', 'UNKNOWN')
+                        }
+                    
+                    # CLS (Cumulative Layout Shift)
+                    if 'CUMULATIVE_LAYOUT_SHIFT_SCORE' in metrics:
+                        cls = metrics['CUMULATIVE_LAYOUT_SHIFT_SCORE']
+                        result['coreWebVitals']['CLS'] = {
+                            'percentile': cls.get('percentile', 0),
+                            'category': cls.get('category', 'UNKNOWN')
+                        }
+            
+            logger.info(f"Page Speed Insights取得成功: {url}")
+            return result
+            
+        except Exception as e:
+            import requests
+            if isinstance(e, requests.exceptions.RequestException):
+                logger.error(f"Page Speed Insights APIリクエストエラー ({url}): {e}")
+                return {
+                    'error': f'APIリクエストエラー: {str(e)}',
+                    'url': url
+                }
+            else:
+                logger.error(f"Page Speed Insights取得エラー ({url}): {e}", exc_info=True)
+                return {
+                    'error': f'予期しないエラー: {str(e)}',
+                    'url': url
+                }
     
     def get_ga4_data(self, date_range_days=30, metrics=None, dimensions=None):
         """

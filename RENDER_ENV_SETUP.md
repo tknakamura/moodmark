@@ -65,6 +65,18 @@ Render.comで環境変数を設定する方法を説明します。
 - **Key**: `GSC_SITE_URL`
 - **Value**: `https://isetan.mistore.jp/moodmark/`
 
+#### 環境変数5: PAGESPEED_INSIGHTS_API_KEY（オプション）
+
+- **Key**: `PAGESPEED_INSIGHTS_API_KEY`
+- **Value**: あなたのPage Speed Insights APIキー
+- **注意**: この環境変数はオプションです。設定しない場合、Page Speed Insightsの分析はスキップされます
+- **取得方法**: 
+  1. Google Cloud Consoleにアクセス
+  2. プロジェクトを選択
+  3. 「APIとサービス」→「ライブラリ」から「PageSpeed Insights API」を有効化
+  4. 「認証情報」→「認証情報を作成」→「APIキー」を選択
+  5. 作成されたAPIキーをコピー
+
 ### ステップ3: Google認証情報ファイルの設定
 
 Google認証情報ファイル（`config/google-credentials-474807.json`）をRender.comにアップロードする必要があります。
