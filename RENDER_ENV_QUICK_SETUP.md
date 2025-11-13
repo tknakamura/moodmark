@@ -54,6 +54,12 @@ python scripts/prepare_credentials_for_render.py
 - **Key**: `OPENAI_API_KEY`
 - **Value**: あなたのOpenAI APIキー（例: `sk-...`）
 
+#### 環境変数5: PAGESPEED_INSIGHTS_API_KEY（オプション）
+
+- **Key**: `PAGESPEED_INSIGHTS_API_KEY`
+- **Value**: あなたのPage Speed Insights APIキー
+- **注意**: この環境変数はオプションです。設定しない場合、Page Speed Insightsの分析はスキップされます
+
 ### ステップ3: 再デプロイ
 
 環境変数を設定した後、Render.comで再デプロイを実行してください。
