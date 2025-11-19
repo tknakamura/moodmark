@@ -538,11 +538,27 @@ def display_kpi_cards(kpi_data):
         return
     
     def calculate_comparison(current, previous, is_lower_better=False):
-        """比較対比を計算"""
+        """
+        比較対比を計算
+        
+        Args:
+            current: 現在の値
+            previous: 比較対象の値
+            is_lower_better: Trueの場合、数値が低いほど良い指標（例: GSC平均ポジション）
+        
+        Returns:
+            tuple: (diff, percent) - diffは表示用（is_lower_betterの場合は符号反転）
+        """
         if previous == 0:
             return None, None
         diff = current - previous
         percent = (diff / previous) * 100 if previous != 0 else None
+        
+        # 数値が低いほど良い指標の場合、差分の符号を反転（表示用）
+        # 例: 平均ポジション 3.1 → 6.9 は改善（-3.8）だが、表示上は +3.8 として表示
+        if is_lower_better:
+            diff = -diff
+        
         return diff, percent
     
     current = kpi_data['current']
