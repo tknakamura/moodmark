@@ -1135,24 +1135,69 @@ class GoogleAPIsIntegration:
         
         return page_stats
     
-    def get_top_queries_gsc(self, date_range_days=30, limit=100, site_name='moodmark'):
+    def get_top_queries_gsc(self, date_range_days=30, limit=100, site_name='moodmark', start_date=None, end_date=None):
         """
         GSCから上位クエリデータを取得
         
         Args:
-            date_range_days (int): 取得する日数
+            date_range_days (int): 取得する日数（start_date/end_dateが指定されていない場合に使用）
             limit (int): 取得件数
             site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
+            start_date (str): 開始日 (YYYY-MM-DD形式、オプション)
+            end_date (str): 終了日 (YYYY-MM-DD形式、オプション)
         
         Returns:
             pd.DataFrame: 上位クエリデータ
         """
-        gsc_data = self.get_gsc_data(
-            date_range_days=date_range_days,
-            dimensions=['query'],
-            row_limit=limit,
-            site_name=site_name
-        )
+        if start_date and end_date:
+            # カスタム日付範囲で取得
+            if not self.gsc_service:
+                logger.error("GSCサービスが初期化されていません。認証ファイルを確認してください。")
+                return pd.DataFrame()
+            
+            gsc_site_url = self.gsc_site_urls.get(site_name)
+            if not gsc_site_url:
+                logger.error(f"GSCサイトURLが設定されていません（サイト: {site_name}）。環境変数を確認してください。")
+                return pd.DataFrame()
+            
+            request = {
+                'startDate': start_date,
+                'endDate': end_date,
+                'dimensions': ['query'],
+                'rowLimit': limit * 2,  # 集計後にlimitで絞るため、多めに取得
+                'startRow': 0
+            }
+            
+            logger.info(f"GSCキーワードデータ取得: サイト={site_name}, 期間={start_date} ～ {end_date}")
+            response = self.gsc_service.searchanalytics().query(
+                siteUrl=gsc_site_url,
+                body=request
+            ).execute()
+            
+            # データの変換
+            data = []
+            if 'rows' in response:
+                for row in response['rows']:
+                    row_data = {}
+                    # ディメンション値
+                    for i, dimension in enumerate(['query']):
+                        if i < len(row.get('keys', [])):
+                            row_data[dimension] = row['keys'][i]
+                    # メトリクス値
+                    row_data['clicks'] = int(row.get('clicks', 0))
+                    row_data['impressions'] = int(row.get('impressions', 0))
+                    row_data['ctr'] = float(row.get('ctr', 0))
+                    row_data['position'] = float(row.get('position', 0))
+                    data.append(row_data)
+            
+            gsc_data = pd.DataFrame(data)
+        else:
+            gsc_data = self.get_gsc_data(
+                date_range_days=date_range_days,
+                dimensions=['query'],
+                row_limit=limit * 2,  # 集計後にlimitで絞るため、多めに取得
+                site_name=site_name
+            )
         
         if gsc_data.empty:
             return pd.DataFrame()
@@ -1171,6 +1216,10 @@ class GoogleAPIsIntegration:
         
         # ソート（クリック数順）
         query_stats = query_stats.sort_values('clicks', ascending=False).reset_index(drop=True)
+        
+        # limitで絞る
+        if len(query_stats) > limit:
+            query_stats = query_stats.head(limit)
         
         return query_stats
     
