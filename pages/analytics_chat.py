@@ -925,22 +925,26 @@ def display_keyword_ranking(current_queries, prev_queries):
             'クリック': {
                 'current': current_clicks,
                 'diff': clicks_diff,
-                'percent': clicks_percent
+                'percent': clicks_percent,
+                'prev': prev_clicks
             },
             'インプレッション': {
                 'current': current_impressions,
                 'diff': impressions_diff,
-                'percent': impressions_percent
+                'percent': impressions_percent,
+                'prev': prev_impressions
             },
             'CTR': {
                 'current': current_ctr,
                 'diff': ctr_diff,
-                'percent': ctr_percent
+                'percent': ctr_percent,
+                'prev': prev_ctr
             },
             'ポジション': {
                 'current': current_position,
                 'diff': position_diff,
-                'percent': position_percent
+                'percent': position_percent,
+                'prev': prev_position
             }
         })
     
@@ -954,22 +958,22 @@ def display_keyword_ranking(current_queries, prev_queries):
             return "#10b981" if diff > 0 else "#ef4444"  # その他: 上がる=緑、下がる=赤
     
     # 差分表示の準備関数
-    def format_delta(diff, percent):
-        if diff is None or percent is None:
+    def format_delta(diff, percent, prev_value):
+        if diff is None or percent is None or prev_value == 0:
             return ""
         sign = "+" if diff >= 0 else ""
         color = get_color(diff)
         return f'<div style="color: {color}; font-size: 12px;">{sign}{diff:,.0f} ({percent:+.1f}%)</div>'
     
-    def format_delta_ctr(diff, percent):
-        if diff is None or percent is None:
+    def format_delta_ctr(diff, percent, prev_value):
+        if diff is None or percent is None or prev_value == 0:
             return ""
         sign = "+" if diff >= 0 else ""
         color = get_color(diff)
         return f'<div style="color: {color}; font-size: 12px;">{sign}{diff:.2f}% ({percent:+.1f}%)</div>'
     
-    def format_delta_position(diff, percent):
-        if diff is None or percent is None:
+    def format_delta_position(diff, percent, prev_value):
+        if diff is None or percent is None or prev_value == 0:
             return ""
         sign = "+" if diff >= 0 else ""
         color = get_color(diff, is_lower_better=True)
@@ -993,25 +997,33 @@ def display_keyword_ranking(current_queries, prev_queries):
     """
     
     for data in table_data:
+        # HTMLエスケープ
+        keyword = data['キーワード'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        
+        clicks_delta = format_delta(data['クリック']['diff'], data['クリック']['percent'], data['クリック']['prev'])
+        impressions_delta = format_delta(data['インプレッション']['diff'], data['インプレッション']['percent'], data['インプレッション']['prev'])
+        ctr_delta = format_delta_ctr(data['CTR']['diff'], data['CTR']['percent'], data['CTR']['prev'])
+        position_delta = format_delta_position(data['ポジション']['diff'], data['ポジション']['percent'], data['ポジション']['prev'])
+        
         html_table += f"""
         <tr style="border-bottom: 1px solid #e5e7eb;">
             <td style="padding: 12px; font-weight: 600;">{data['順位']}</td>
-            <td style="padding: 12px;">{data['キーワード']}</td>
+            <td style="padding: 12px;">{keyword}</td>
             <td style="padding: 12px; text-align: right;">
                 <div>{data['クリック']['current']:,}</div>
-                {format_delta(data['クリック']['diff'], data['クリック']['percent'])}
+                {clicks_delta}
             </td>
             <td style="padding: 12px; text-align: right;">
                 <div>{data['インプレッション']['current']:,}</div>
-                {format_delta(data['インプレッション']['diff'], data['インプレッション']['percent'])}
+                {impressions_delta}
             </td>
             <td style="padding: 12px; text-align: right;">
                 <div>{data['CTR']['current']:.2f}%</div>
-                {format_delta_ctr(data['CTR']['diff'], data['CTR']['percent'])}
+                {ctr_delta}
             </td>
             <td style="padding: 12px; text-align: right;">
                 <div>{data['ポジション']['current']:.1f}</div>
-                {format_delta_position(data['ポジション']['diff'], data['ポジション']['percent'])}
+                {position_delta}
             </td>
         </tr>
         """
@@ -1022,7 +1034,9 @@ def display_keyword_ranking(current_queries, prev_queries):
     </div>
     """
     
-    st.markdown(html_table, unsafe_allow_html=True)
+    # Streamlit Componentsを使用してHTMLを表示
+    import streamlit.components.v1 as components
+    components.html(html_table, height=1200, scrolling=True)
     st.markdown("---")
 
 # KPIカードの表示（AIチャットが初期化されている場合のみ）
