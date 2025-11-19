@@ -14,6 +14,8 @@ from typing import Dict, Any
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+import google_auth_httplib2
+import httplib2
 import logging
 
 # ログ設定
@@ -172,13 +174,17 @@ class GoogleAPIsIntegration:
                 logger.warning(f"  - GOOGLE_CREDENTIALS_FILE: 認証ファイルのパス（現在: {self.credentials_file}）")
                 return
             
-            # GA4 APIサービス構築
-            self.ga4_service = build('analyticsdata', 'v1beta', credentials=self.credentials)
+            # HTTPオブジェクトにタイムアウトを設定（60秒）
+            http = httplib2.Http(timeout=60)
+            authorized_http = google_auth_httplib2.AuthorizedHttp(self.credentials, http=http)
             
-            # GSC APIサービス構築
-            self.gsc_service = build('searchconsole', 'v1', credentials=self.credentials)
+            # GA4 APIサービス構築（タイムアウト付きHTTPオブジェクトを使用）
+            self.ga4_service = build('analyticsdata', 'v1beta', credentials=self.credentials, http=authorized_http)
             
-            logger.info("Google APIs認証完了")
+            # GSC APIサービス構築（タイムアウト付きHTTPオブジェクトを使用）
+            self.gsc_service = build('searchconsole', 'v1', credentials=self.credentials, http=authorized_http)
+            
+            logger.info("Google APIs認証完了（タイムアウト: 60秒）")
             
         except Exception as e:
             logger.error(f"認証エラー: {e}", exc_info=True)
@@ -648,13 +654,13 @@ class GoogleAPIsIntegration:
                     }
                     logger.info(f"ページパスフィルタを適用: {normalized_site} -> {page_path_prefix}")
             
-            # GA4リクエスト作成
+            # GA4リクエスト作成（limitを最適化してタイムアウトを防ぐ）
             request_body = {
                 'property': f'properties/{self.ga4_property_id}',
                 'dateRanges': [{'startDate': start_date, 'endDate': end_date}],
                 'metrics': [{'name': metric} for metric in metrics],
                 'dimensions': [{'name': dimension} for dimension in dimensions],
-                'limit': 100000
+                'limit': 10000  # タイムアウトを防ぐため、limitを10000に制限
             }
             
             # ページパスフィルタを追加
@@ -807,13 +813,13 @@ class GoogleAPIsIntegration:
                     }
                     logger.info(f"ページパスフィルタを適用: {normalized_site} -> {page_path_prefix}")
             
-            # GA4リクエスト作成
+            # GA4リクエスト作成（limitを最適化してタイムアウトを防ぐ）
             request_body = {
                 'property': f'properties/{self.ga4_property_id}',
                 'dateRanges': [{'startDate': start_date, 'endDate': end_date}],
                 'metrics': [{'name': metric} for metric in metrics],
                 'dimensions': [{'name': dimension} for dimension in dimensions],
-                'limit': 100000
+                'limit': 10000  # タイムアウトを防ぐため、limitを10000に制限
             }
             
             # ページパスフィルタを追加
