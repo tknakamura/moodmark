@@ -547,18 +547,12 @@ def display_kpi_cards(kpi_data):
             is_lower_better: Trueの場合、数値が低いほど良い指標（例: GSC平均ポジション）
         
         Returns:
-            tuple: (diff, percent) - diffは表示用（is_lower_betterの場合は符号反転）
+            tuple: (diff, percent) - diffは符号そのまま（色はst.metricのdelta_colorで制御）
         """
         if previous == 0:
             return None, None
         diff = current - previous
         percent = (diff / previous) * 100 if previous != 0 else None
-        
-        # 数値が低いほど良い指標の場合、差分の符号を反転（表示用）
-        # 例: 平均ポジション 3.1 → 6.9 は改善（-3.8）だが、表示上は +3.8 として表示
-        if is_lower_better:
-            diff = -diff
-        
         return diff, percent
     
     current = kpi_data['current']
@@ -660,7 +654,8 @@ def display_kpi_cards(kpi_data):
         st.metric(
             label="GSC 平均ポジション",
             value=f"{current['gsc_position']:.1f}",
-            delta=f"{gsc_position_diff:+.1f} ({gsc_position_percent:+.2f}%)" if gsc_position_percent is not None else None
+            delta=f"{gsc_position_diff:+.1f} ({gsc_position_percent:+.2f}%)" if gsc_position_percent is not None else None,
+            delta_color="inverse"  # 数値が低いほど良い指標のため、負の値（改善）を緑色で表示
         )
     
     st.markdown("---")
