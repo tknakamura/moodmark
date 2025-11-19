@@ -1081,12 +1081,18 @@ def fetch_page_ranking_data(date_range_days, start_date=None, end_date=None, sit
         st.error(f"ページランキングデータ取得エラー: {str(e)}")
         return None, None
 
-def display_page_ranking(current_pages, prev_pages):
+def display_page_ranking(current_pages, prev_pages, site_name='moodmark'):
     """ページランキングテーブルを表示"""
     if current_pages is None or current_pages.empty:
         return
     
     st.subheader("📄 ページランキング（上位30件）")
+    
+    # サイトのベースURLを取得
+    if site_name == 'moodmarkgift':
+        site_base_url = 'https://isetan.mistore.jp'
+    else:
+        site_base_url = 'https://isetan.mistore.jp'
     
     # 比較期間のデータを辞書に変換（高速検索用）
     prev_dict = {}
@@ -1208,8 +1214,20 @@ def display_page_ranking(current_pages, prev_pages):
     """
     
     for data in table_data:
+        # HTMLエスケープとハイパーリンク作成
+        page_url_raw = data['ページ']
+        # URLが完全なURLでない場合（パスのみの場合）、サイトURLを追加
+        if not page_url_raw.startswith('http://') and not page_url_raw.startswith('https://'):
+            full_url = site_base_url + page_url_raw
+        else:
+            full_url = page_url_raw
+        
         # HTMLエスケープ
-        page_url = data['ページ'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        page_url_escaped = page_url_raw.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        full_url_escaped = full_url.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        
+        # ハイパーリンク作成
+        page_link = f'<a href="{full_url_escaped}" target="_blank" rel="noopener noreferrer" style="color: #1f77b4; text-decoration: underline;">{page_url_escaped}</a>'
         
         clicks_delta = format_delta(data['クリック']['diff'], data['クリック']['percent'], data['クリック']['prev'])
         impressions_delta = format_delta(data['インプレッション']['diff'], data['インプレッション']['percent'], data['インプレッション']['prev'])
@@ -1219,7 +1237,7 @@ def display_page_ranking(current_pages, prev_pages):
         html_table += f"""
         <tr style="border-bottom: 1px solid #e5e7eb;">
             <td style="padding: 12px; font-weight: 600;">{data['順位']}</td>
-            <td style="padding: 12px; word-break: break-all; max-width: 400px;">{page_url}</td>
+            <td style="padding: 12px; word-break: break-all; max-width: 400px;">{page_link}</td>
             <td style="padding: 12px; text-align: right;">
                 <div>{data['クリック']['current']:,}</div>
                 {clicks_delta}
@@ -1293,7 +1311,7 @@ if st.session_state.ai_chat is not None:
             site_name=st.session_state.selected_site
         )
         if current_pages is not None and not current_pages.empty:
-            display_page_ranking(current_pages, prev_pages)
+            display_page_ranking(current_pages, prev_pages, site_name=st.session_state.selected_site)
 
 # メインエリア
 # チャット履歴の表示
