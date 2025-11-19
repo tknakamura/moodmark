@@ -629,6 +629,13 @@ def fetch_traffic_trend_data(date_range_days, start_date=None, end_date=None, si
             ga4_data['date'] = pd.to_datetime(ga4_data['date'])
             ga4_data = ga4_data.sort_values('date')
         
+        # 日別に集計（同じ日付のデータがある場合に備えて）
+        if 'date' in ga4_data.columns:
+            ga4_data = ga4_data.groupby('date').agg({
+                'sessions': 'sum',
+                'conversions': 'sum'
+            }).reset_index()
+        
         return ga4_data
     except Exception as e:
         st.error(f"トラフィック推移データ取得エラー: {str(e)}")
@@ -646,13 +653,32 @@ def display_traffic_trend_chart(traffic_data):
         st.warning("日付データが見つかりません")
         return
     
-    # 日付を文字列に変換（表示用）
-    traffic_data['date_str'] = traffic_data['date'].dt.strftime('%Y%m%d')
+    # セッション数とトランザクション数を取得（数値に変換）
+    sessions = []
+    transactions = []
+    dates = []
     
-    # セッション数とトランザクション数を取得
-    sessions = traffic_data['sessions'].values if 'sessions' in traffic_data.columns else []
-    transactions = traffic_data['conversions'].values if 'conversions' in traffic_data.columns else []
-    dates = traffic_data['date_str'].values
+    for _, row in traffic_data.iterrows():
+        date_val = row['date']
+        if pd.notna(date_val):
+            dates.append(date_val)
+            # セッション数を取得（数値に変換）
+            session_val = row.get('sessions', 0)
+            if pd.notna(session_val):
+                sessions.append(float(session_val))
+            else:
+                sessions.append(0.0)
+            
+            # トランザクション数を取得（conversionsから、数値に変換）
+            transaction_val = row.get('conversions', 0)
+            if pd.notna(transaction_val):
+                transactions.append(float(transaction_val))
+            else:
+                transactions.append(0.0)
+    
+    if not dates:
+        st.warning("表示するデータがありません")
+        return
     
     # Plotlyでグラフを作成
     fig = go.Figure()
@@ -664,7 +690,8 @@ def display_traffic_trend_chart(traffic_data):
         name='セッション',
         line=dict(color='#8884d8', width=2),
         mode='lines+markers',
-        marker=dict(size=4)
+        marker=dict(size=4),
+        hovertemplate='<b>%{x|%Y年%m月%d日}</b><br>セッション: %{y:,.0f}<extra></extra>'
     ))
     
     # トランザクションの折れ線（右Y軸）
@@ -675,8 +702,25 @@ def display_traffic_trend_chart(traffic_data):
         line=dict(color='#82ca9d', width=2),
         mode='lines+markers',
         marker=dict(size=4),
-        yaxis='y2'
+        yaxis='y2',
+        hovertemplate='<b>%{x|%Y年%m月%d日}</b><br>トランザクション: %{y:,.0f}<extra></extra>'
     ))
+    
+    # X軸の日付フォーマットを設定
+    # データ数に応じてtick間隔を調整
+    num_dates = len(dates)
+    if num_dates <= 7:
+        dtick_value = 86400000  # 1日（ミリ秒）
+        tickformat = '%m/%d'
+    elif num_dates <= 30:
+        dtick_value = 86400000 * 2  # 2日間隔
+        tickformat = '%m/%d'
+    elif num_dates <= 90:
+        dtick_value = 86400000 * 7  # 1週間間隔
+        tickformat = '%m/%d'
+    else:
+        dtick_value = 86400000 * 14  # 2週間間隔
+        tickformat = '%m/%d'
     
     # レイアウト設定
     fig.update_layout(
@@ -684,30 +728,39 @@ def display_traffic_trend_chart(traffic_data):
         xaxis=dict(
             title='',
             tickangle=-45,
-            tickmode='linear',
-            tick0=0,
-            dtick=1
+            tickformat=tickformat,
+            type='date',
+            showgrid=True,
+            gridcolor='rgba(204, 204, 204, 0.3)'
         ),
         yaxis=dict(
-            title=dict(text='セッション', font=dict(color='#8884d8')),
+            title=dict(text='セッション', font=dict(color='#8884d8', size=12)),
             tickfont=dict(color='#8884d8'),
-            side='left'
+            side='left',
+            showgrid=True,
+            gridcolor='rgba(204, 204, 204, 0.1)',
+            rangemode='tozero'
         ),
         yaxis2=dict(
-            title=dict(text='トランザクション', font=dict(color='#82ca9d')),
+            title=dict(text='トランザクション', font=dict(color='#82ca9d', size=12)),
             tickfont=dict(color='#82ca9d'),
             overlaying='y',
-            side='right'
+            side='right',
+            showgrid=False,
+            rangemode='tozero'
         ),
         legend=dict(
             orientation='h',
             yanchor='bottom',
             y=1.02,
             xanchor='right',
-            x=1
+            x=1,
+            bgcolor='rgba(255, 255, 255, 0.8)'
         ),
         hovermode='x unified',
-        margin=dict(l=50, r=50, t=50, b=100)
+        margin=dict(l=60, r=60, t=50, b=100),
+        plot_bgcolor='white',
+        paper_bgcolor='white'
     )
     
     st.plotly_chart(fig, use_container_width=True)
