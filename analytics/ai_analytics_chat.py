@@ -339,10 +339,10 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             dict: サマリーデータ
         """
         try:
-            # サイト名が指定された場合は、プロパティIDを設定
+            # サイト名が指定された場合は、GSCサイトURLを設定（GA4はページパスフィルタで切り分け）
             if site_name:
                 self.google_apis.set_site(site_name)
-                logger.info(f"GA4プロパティIDを設定: {site_name} -> {self.google_apis.ga4_property_id}")
+                logger.info(f"サイト設定: {site_name} (GA4プロパティID: {self.google_apis.ga4_property_id}, ページパスフィルタで切り分け)")
             # 個別ページのデータを取得する場合
             if page_url:
                 logger.info(f"個別ページのGA4データ取得開始: URL={page_url}, 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
@@ -413,13 +413,15 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                     start_date=start_date,
                     end_date=end_date,
                     metrics=extended_metrics,
-                    dimensions=extended_dimensions
+                    dimensions=extended_dimensions,
+                    site_name=site_name
                 )
             else:
                 ga4_data = self.google_apis.get_ga4_data(
                     date_range_days=date_range_days,
                     metrics=extended_metrics,
-                    dimensions=extended_dimensions
+                    dimensions=extended_dimensions,
+                    site_name=site_name
                 )
             
             logger.info(f"GA4データ取得完了: {len(ga4_data)}行")

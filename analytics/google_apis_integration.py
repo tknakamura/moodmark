@@ -89,7 +89,8 @@ class GoogleAPIsIntegration:
     
     def set_site(self, site_name: str):
         """
-        サイト名に応じてGA4プロパティIDとGSCサイトURLを設定
+        サイト名に応じてGSCサイトURLを設定
+        （GA4プロパティIDは共通のため、ページパスフィルタで切り分けます）
         
         Args:
             site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
@@ -97,19 +98,15 @@ class GoogleAPIsIntegration:
         # 正規化（moodmark_idea -> moodmarkgift）
         normalized_site = 'moodmarkgift' if site_name == 'moodmark_idea' else site_name
         
-        # GA4プロパティIDを設定
-        if normalized_site in self.ga4_property_ids:
-            self.ga4_property_id = self.ga4_property_ids[normalized_site]
-            logger.info(f"GA4プロパティIDを設定: {normalized_site} -> {self.ga4_property_id}")
-        else:
-            logger.warning(f"サイト '{normalized_site}' のGA4プロパティIDが見つかりません。デフォルトを使用します。")
-        
         # GSCサイトURLを設定
         if normalized_site in self.gsc_site_urls:
             self.gsc_site_url = self.gsc_site_urls[normalized_site]
             logger.info(f"GSCサイトURLを設定: {normalized_site} -> {self.gsc_site_url}")
         else:
             logger.warning(f"サイト '{normalized_site}' のGSCサイトURLが見つかりません。デフォルトを使用します。")
+        
+        # GA4プロパティIDは共通のため変更しない（ページパスフィルタで切り分け）
+        logger.info(f"GA4プロパティID（共通）: {self.ga4_property_id}, サイト: {normalized_site}（ページパスフィルタで切り分け）")
     
     def _authenticate(self):
         """Google APIs認証"""
@@ -573,7 +570,7 @@ class GoogleAPIsIntegration:
                     'url': url
                 }
     
-    def get_ga4_data(self, date_range_days=30, metrics=None, dimensions=None):
+    def get_ga4_data(self, date_range_days=30, metrics=None, dimensions=None, site_name=None):
         """
         GA4からデータを取得
         
@@ -581,6 +578,7 @@ class GoogleAPIsIntegration:
             date_range_days (int): 取得する日数
             metrics (list): 取得するメトリクス
             dimensions (list): 取得するディメンション
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')、指定された場合はページパスでフィルタリング
         
         Returns:
             pd.DataFrame: GA4データ
@@ -621,19 +619,54 @@ class GoogleAPIsIntegration:
             end_date = datetime.now().strftime('%Y-%m-%d')
             start_date = (datetime.now() - timedelta(days=date_range_days)).strftime('%Y-%m-%d')
             
+            # サイト名に応じてページパスフィルタを設定
+            dimension_filter = None
+            if site_name:
+                # 正規化（moodmark_idea -> moodmarkgift）
+                normalized_site = 'moodmarkgift' if site_name == 'moodmark_idea' else site_name
+                if normalized_site == 'moodmark':
+                    page_path_prefix = '/moodmark'
+                elif normalized_site == 'moodmarkgift':
+                    page_path_prefix = '/moodmarkgift'
+                else:
+                    page_path_prefix = None
+                
+                if page_path_prefix:
+                    # pagePathディメンションが含まれていない場合は追加
+                    if 'pagePath' not in dimensions:
+                        dimensions.append('pagePath')
+                        logger.info(f"pagePathディメンションを追加（フィルタ用）")
+                    
+                    dimension_filter = {
+                        'filter': {
+                            'fieldName': 'pagePath',
+                            'stringFilter': {
+                                'matchType': 'BEGINS_WITH',
+                                'value': page_path_prefix
+                            }
+                        }
+                    }
+                    logger.info(f"ページパスフィルタを適用: {normalized_site} -> {page_path_prefix}")
+            
             # GA4リクエスト作成
+            request_body = {
+                'property': f'properties/{self.ga4_property_id}',
+                'dateRanges': [{'startDate': start_date, 'endDate': end_date}],
+                'metrics': [{'name': metric} for metric in metrics],
+                'dimensions': [{'name': dimension} for dimension in dimensions],
+                'limit': 100000
+            }
+            
+            # ページパスフィルタを追加
+            if dimension_filter:
+                request_body['dimensionFilter'] = dimension_filter
+            
             request = {
-                'requests': [{
-                    'property': f'properties/{self.ga4_property_id}',
-                    'dateRanges': [{'startDate': start_date, 'endDate': end_date}],
-                    'metrics': [{'name': metric} for metric in metrics],
-                    'dimensions': [{'name': dimension} for dimension in dimensions],
-                    'limit': 100000
-                }]
+                'requests': [request_body]
             }
             
             # API呼び出し
-            logger.info(f"GA4 API呼び出し開始: プロパティID={self.ga4_property_id}, 期間={start_date}～{end_date}, ディメンション={dimensions}")
+            logger.info(f"GA4 API呼び出し開始: プロパティID={self.ga4_property_id}, 期間={start_date}～{end_date}, ディメンション={dimensions}, サイト={site_name}")
             try:
                 response = self.ga4_service.properties().batchRunReports(
                     property=f'properties/{self.ga4_property_id}',
@@ -696,7 +729,7 @@ class GoogleAPIsIntegration:
             logger.error(f"  プロパティID: {self.ga4_property_id}")
             return pd.DataFrame()
     
-    def get_ga4_data_custom_range(self, start_date: str, end_date: str, metrics=None, dimensions=None):
+    def get_ga4_data_custom_range(self, start_date: str, end_date: str, metrics=None, dimensions=None, site_name=None):
         """
         カスタム日付範囲でGA4データを取得
         
@@ -705,6 +738,7 @@ class GoogleAPIsIntegration:
             end_date (str): 終了日 (YYYY-MM-DD)
             metrics (list): 取得するメトリクス
             dimensions (list): 取得するディメンション
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')、指定された場合はページパスでフィルタリング
         
         Returns:
             pd.DataFrame: GA4データ
@@ -741,18 +775,54 @@ class GoogleAPIsIntegration:
             ]
         
         try:
+            # サイト名に応じてページパスフィルタを設定
+            dimension_filter = None
+            if site_name:
+                # 正規化（moodmark_idea -> moodmarkgift）
+                normalized_site = 'moodmarkgift' if site_name == 'moodmark_idea' else site_name
+                if normalized_site == 'moodmark':
+                    page_path_prefix = '/moodmark'
+                elif normalized_site == 'moodmarkgift':
+                    page_path_prefix = '/moodmarkgift'
+                else:
+                    page_path_prefix = None
+                
+                if page_path_prefix:
+                    # pagePathディメンションが含まれていない場合は追加
+                    if 'pagePath' not in dimensions:
+                        dimensions.append('pagePath')
+                        logger.info(f"pagePathディメンションを追加（フィルタ用）")
+                    
+                    dimension_filter = {
+                        'filter': {
+                            'fieldName': 'pagePath',
+                            'stringFilter': {
+                                'matchType': 'BEGINS_WITH',
+                                'value': page_path_prefix
+                            }
+                        }
+                    }
+                    logger.info(f"ページパスフィルタを適用: {normalized_site} -> {page_path_prefix}")
+            
             # GA4リクエスト作成
+            request_body = {
+                'property': f'properties/{self.ga4_property_id}',
+                'dateRanges': [{'startDate': start_date, 'endDate': end_date}],
+                'metrics': [{'name': metric} for metric in metrics],
+                'dimensions': [{'name': dimension} for dimension in dimensions],
+                'limit': 100000
+            }
+            
+            # ページパスフィルタを追加
+            if dimension_filter:
+                request_body['dimensionFilter'] = dimension_filter
+            
             request = {
-                'requests': [{
-                    'property': f'properties/{self.ga4_property_id}',
-                    'dateRanges': [{'startDate': start_date, 'endDate': end_date}],
-                    'metrics': [{'name': metric} for metric in metrics],
-                    'dimensions': [{'name': dimension} for dimension in dimensions],
-                    'limit': 100000
-                }]
+                'requests': [request_body]
             }
             
             # API呼び出し
+            logger.info(f"GA4 API呼び出し開始: プロパティID={self.ga4_property_id}, 期間={start_date}～{end_date}, ディメンション={dimensions}, サイト={site_name}")
             response = self.ga4_service.properties().batchRunReports(
                 property=f'properties/{self.ga4_property_id}',
                 body=request
