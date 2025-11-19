@@ -215,7 +215,8 @@ def main():
     )
     
     ga4_property_id = '316302380'
-    gsc_site_url = 'https://isetan.mistore.jp/moodmark/'
+    # テストするサイトURL（moodmarkgiftまたはmoodmark）
+    gsc_site_url = 'https://isetan.mistore.jp/moodmarkgift/'
     
     # ファイルの存在確認
     if not os.path.exists(credentials_file):

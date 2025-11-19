@@ -329,20 +329,26 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             # サイト全体のデータを取得する場合
             logger.info(f"GA4データ取得開始: 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
             
-            # 基本的なメトリクスを取得
+            # 拡張メトリクスを取得（収益、コンバージョン、アイテム購入を含む）
             # GA4 APIでは 'users' ではなく 'activeUsers'、'pageviews' ではなく 'screenPageViews' を使用
+            extended_metrics = [
+                'sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration',
+                'conversions', 'purchases', 'totalRevenue', 'purchaseRevenue', 'itemPurchases', 'itemsPurchased'
+            ]
+            extended_dimensions = ['date', 'sessionDefaultChannelGroup']
+            
             if start_date and end_date:
                 ga4_data = self.google_apis.get_ga4_data_custom_range(
                     start_date=start_date,
                     end_date=end_date,
-                    metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
-                    dimensions=['date']
+                    metrics=extended_metrics,
+                    dimensions=extended_dimensions
                 )
             else:
                 ga4_data = self.google_apis.get_ga4_data(
                     date_range_days=date_range_days,
-                    metrics=['sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration'],
-                    dimensions=['date']
+                    metrics=extended_metrics,
+                    dimensions=extended_dimensions
                 )
             
             logger.info(f"GA4データ取得完了: {len(ga4_data)}行")
@@ -372,18 +378,140 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                     "is_page_specific": False
                 }
             
+            # 基本メトリクスの集計
+            total_sessions = int(ga4_data['sessions'].sum()) if 'sessions' in ga4_data.columns else 0
+            total_users = int(ga4_data['activeUsers'].sum()) if 'activeUsers' in ga4_data.columns else 0
+            total_pageviews = int(ga4_data['screenPageViews'].sum()) if 'screenPageViews' in ga4_data.columns else 0
+            avg_bounce_rate = float(ga4_data['bounceRate'].mean()) if 'bounceRate' in ga4_data.columns else 0.0
+            avg_session_duration = float(ga4_data['averageSessionDuration'].mean()) if 'averageSessionDuration' in ga4_data.columns else 0.0
+            
+            # 収益データの集計（エラーハンドリング付き）
+            total_revenue = 0.0
+            purchase_revenue = 0.0
+            try:
+                if 'totalRevenue' in ga4_data.columns:
+                    total_revenue = float(ga4_data['totalRevenue'].sum())
+                if 'purchaseRevenue' in ga4_data.columns:
+                    purchase_revenue = float(ga4_data['purchaseRevenue'].sum())
+            except (KeyError, ValueError, TypeError) as e:
+                logger.warning(f"収益データの集計エラー: {e}")
+            
+            # コンバージョンデータの集計
+            total_conversions = 0
+            total_purchases = 0
+            try:
+                if 'conversions' in ga4_data.columns:
+                    total_conversions = int(ga4_data['conversions'].sum())
+                if 'purchases' in ga4_data.columns:
+                    total_purchases = int(ga4_data['purchases'].sum())
+            except (KeyError, ValueError, TypeError) as e:
+                logger.warning(f"コンバージョンデータの集計エラー: {e}")
+            
+            # CVR（コンバージョン率）の計算
+            cvr = 0.0
+            if total_sessions > 0 and total_conversions > 0:
+                cvr = (total_conversions / total_sessions) * 100
+            
+            # アイテム購入数の集計
+            total_item_purchases = 0
+            total_items_purchased = 0
+            try:
+                if 'itemPurchases' in ga4_data.columns:
+                    total_item_purchases = int(ga4_data['itemPurchases'].sum())
+                if 'itemsPurchased' in ga4_data.columns:
+                    total_items_purchased = int(ga4_data['itemsPurchased'].sum())
+            except (KeyError, ValueError, TypeError) as e:
+                logger.warning(f"アイテム購入データの集計エラー: {e}")
+            
+            # 平均セッションあたり収益の計算
+            revenue_per_session = 0.0
+            if total_sessions > 0 and total_revenue > 0:
+                revenue_per_session = total_revenue / total_sessions
+            
+            # チャネル別データの集計
+            channel_data = {}
+            if 'sessionDefaultChannelGroup' in ga4_data.columns:
+                try:
+                    channel_grouped = ga4_data.groupby('sessionDefaultChannelGroup').agg({
+                        'sessions': 'sum',
+                        'conversions': 'sum',
+                        'totalRevenue': 'sum',
+                        'purchases': 'sum'
+                    }).reset_index()
+                    
+                    for _, row in channel_grouped.iterrows():
+                        channel_name = row['sessionDefaultChannelGroup']
+                        channel_sessions = int(row['sessions']) if pd.notna(row['sessions']) else 0
+                        channel_conversions = int(row['conversions']) if pd.notna(row['conversions']) else 0
+                        channel_revenue = float(row['totalRevenue']) if pd.notna(row['totalRevenue']) else 0.0
+                        channel_purchases = int(row['purchases']) if pd.notna(row['purchases']) else 0
+                        
+                        # チャネル別CVRの計算
+                        channel_cvr = 0.0
+                        if channel_sessions > 0 and channel_conversions > 0:
+                            channel_cvr = (channel_conversions / channel_sessions) * 100
+                        
+                        channel_data[channel_name] = {
+                            'sessions': channel_sessions,
+                            'conversions': channel_conversions,
+                            'revenue': channel_revenue,
+                            'purchases': channel_purchases,
+                            'cvr': channel_cvr
+                        }
+                except Exception as e:
+                    logger.warning(f"チャネル別データの集計エラー: {e}")
+            
+            # トップチャネルの抽出（セッション数順）
+            top_channels_by_sessions = []
+            if channel_data:
+                sorted_channels = sorted(channel_data.items(), key=lambda x: x[1]['sessions'], reverse=True)
+                top_channels_by_sessions = [
+                    {
+                        'channel': name,
+                        'sessions': data['sessions'],
+                        'revenue': data['revenue'],
+                        'cvr': data['cvr']
+                    }
+                    for name, data in sorted_channels[:10]  # トップ10
+                ]
+            
+            # トップチャネルの抽出（収益順）
+            top_channels_by_revenue = []
+            if channel_data:
+                sorted_channels = sorted(channel_data.items(), key=lambda x: x[1]['revenue'], reverse=True)
+                top_channels_by_revenue = [
+                    {
+                        'channel': name,
+                        'sessions': data['sessions'],
+                        'revenue': data['revenue'],
+                        'cvr': data['cvr']
+                    }
+                    for name, data in sorted_channels[:10]  # トップ10
+                ]
+            
             summary = {
-                "total_sessions": int(ga4_data['sessions'].sum()) if 'sessions' in ga4_data.columns else 0,
-                "total_users": int(ga4_data['activeUsers'].sum()) if 'activeUsers' in ga4_data.columns else 0,  # GA4 APIでは 'activeUsers' を使用
-                "total_pageviews": int(ga4_data['screenPageViews'].sum()) if 'screenPageViews' in ga4_data.columns else 0,  # GA4 APIでは 'screenPageViews' を使用
-                "avg_bounce_rate": float(ga4_data['bounceRate'].mean()) if 'bounceRate' in ga4_data.columns else 0,
-                "avg_session_duration": float(ga4_data['averageSessionDuration'].mean()) if 'averageSessionDuration' in ga4_data.columns else 0,
+                "total_sessions": total_sessions,
+                "total_users": total_users,
+                "total_pageviews": total_pageviews,
+                "avg_bounce_rate": avg_bounce_rate,
+                "avg_session_duration": avg_session_duration,
+                "total_revenue": total_revenue,
+                "purchase_revenue": purchase_revenue,
+                "revenue_per_session": revenue_per_session,
+                "total_conversions": total_conversions,
+                "total_purchases": total_purchases,
+                "cvr": cvr,
+                "total_item_purchases": total_item_purchases,
+                "total_items_purchased": total_items_purchased,
+                "channel_data": channel_data,
+                "top_channels_by_sessions": top_channels_by_sessions,
+                "top_channels_by_revenue": top_channels_by_revenue,
                 "date_range_days": date_range_days,
                 "data_points": len(ga4_data),
                 "is_page_specific": False
             }
             
-            logger.info(f"GA4サマリー: セッション={summary['total_sessions']:,}, ユーザー={summary['total_users']:,}, PV={summary['total_pageviews']:,}")
+            logger.info(f"GA4サマリー: セッション={summary['total_sessions']:,}, ユーザー={summary['total_users']:,}, PV={summary['total_pageviews']:,}, 収益={summary['total_revenue']:,.0f}, CVR={summary['cvr']:.2f}%")
             
             return summary
             
@@ -1265,7 +1393,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                     logger.info(f"個別ページのGA4データ取得成功: セッション={ga4_summary['total_sessions']:,}, ユーザー={ga4_summary['total_users']:,}, PV={ga4_summary['total_pageviews']:,}")
                     context_parts.append(f"=== 個別ページのGoogle Analytics 4 (GA4) データ: {page_url_for_ga4} ===")
                 else:
-                    logger.info(f"GA4データ取得成功: セッション={ga4_summary['total_sessions']:,}, ユーザー={ga4_summary['total_users']:,}, PV={ga4_summary['total_pageviews']:,}")
+                    logger.info(f"GA4データ取得成功: セッション={ga4_summary['total_sessions']:,}, ユーザー={ga4_summary['total_users']:,}, PV={ga4_summary['total_pageviews']:,}, 収益={ga4_summary.get('total_revenue', 0):,.0f}, CVR={ga4_summary.get('cvr', 0):.2f}%")
                     context_parts.append("=== Google Analytics 4 (GA4) データ（サイト全体） ===")
                 if start_date and end_date:
                     context_parts.append(f"期間: {start_date} ～ {end_date}")
@@ -1276,6 +1404,52 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                 context_parts.append(f"総ページビュー数: {ga4_summary['total_pageviews']:,}")
                 context_parts.append(f"平均バウンス率: {ga4_summary['avg_bounce_rate']:.2%}")
                 context_parts.append(f"平均セッション時間: {ga4_summary['avg_session_duration']:.2f}秒")
+                
+                # 収益データ（エラーハンドリング付き）
+                if 'total_revenue' in ga4_summary and ga4_summary.get('total_revenue', 0) > 0:
+                    context_parts.append("")
+                    context_parts.append("【収益データ】")
+                    context_parts.append(f"総収益: ¥{ga4_summary['total_revenue']:,.0f}")
+                    if 'purchase_revenue' in ga4_summary and ga4_summary.get('purchase_revenue', 0) > 0:
+                        context_parts.append(f"購入収益: ¥{ga4_summary['purchase_revenue']:,.0f}")
+                    if 'revenue_per_session' in ga4_summary and ga4_summary.get('revenue_per_session', 0) > 0:
+                        context_parts.append(f"平均セッションあたり収益: ¥{ga4_summary['revenue_per_session']:,.0f}")
+                
+                # CVR（コンバージョン率）データ
+                if 'cvr' in ga4_summary and ga4_summary.get('cvr', 0) > 0:
+                    context_parts.append("")
+                    context_parts.append("【コンバージョン・CVRデータ】")
+                    if 'total_conversions' in ga4_summary:
+                        context_parts.append(f"総コンバージョン数: {ga4_summary['total_conversions']:,}")
+                    if 'total_purchases' in ga4_summary:
+                        context_parts.append(f"総購入数: {ga4_summary['total_purchases']:,}")
+                    context_parts.append(f"CVR（コンバージョン率）: {ga4_summary['cvr']:.2f}%")
+                
+                # アイテム購入数データ
+                if 'total_items_purchased' in ga4_summary and ga4_summary.get('total_items_purchased', 0) > 0:
+                    context_parts.append("")
+                    context_parts.append("【アイテム購入データ】")
+                    if 'total_item_purchases' in ga4_summary:
+                        context_parts.append(f"アイテム購入イベント数: {ga4_summary['total_item_purchases']:,}")
+                    context_parts.append(f"総アイテム購入数: {ga4_summary['total_items_purchased']:,}")
+                    if 'total_purchases' in ga4_summary and ga4_summary.get('total_purchases', 0) > 0:
+                        avg_items_per_purchase = ga4_summary['total_items_purchased'] / ga4_summary['total_purchases']
+                        context_parts.append(f"平均購入アイテム数: {avg_items_per_purchase:.2f}個")
+                
+                # チャネル別データ
+                if 'channel_data' in ga4_summary and ga4_summary.get('channel_data'):
+                    context_parts.append("")
+                    context_parts.append("【チャネル別パフォーマンス】")
+                    if 'top_channels_by_sessions' in ga4_summary and ga4_summary['top_channels_by_sessions']:
+                        context_parts.append("トップチャネル（セッション数順）:")
+                        for i, channel in enumerate(ga4_summary['top_channels_by_sessions'][:5], 1):
+                            context_parts.append(f"  {i}. {channel['channel']}: セッション数 {channel['sessions']:,}, 収益 ¥{channel['revenue']:,.0f}, CVR {channel['cvr']:.2f}%")
+                    if 'top_channels_by_revenue' in ga4_summary and ga4_summary['top_channels_by_revenue']:
+                        context_parts.append("")
+                        context_parts.append("トップチャネル（収益順）:")
+                        for i, channel in enumerate(ga4_summary['top_channels_by_revenue'][:5], 1):
+                            context_parts.append(f"  {i}. {channel['channel']}: 収益 ¥{channel['revenue']:,.0f}, セッション数 {channel['sessions']:,}, CVR {channel['cvr']:.2f}%")
+                
                 context_parts.append("")
             else:
                 # エラーが発生した場合もコンテキストに含める
@@ -1375,6 +1549,54 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                 context_parts.append(f"総セッション数: {ga4_summary['total_sessions']:,}")
                 context_parts.append(f"総ユーザー数: {ga4_summary['total_users']:,}")
                 context_parts.append(f"総ページビュー数: {ga4_summary['total_pageviews']:,}")
+                context_parts.append(f"平均バウンス率: {ga4_summary.get('avg_bounce_rate', 0):.2%}")
+                context_parts.append(f"平均セッション時間: {ga4_summary.get('avg_session_duration', 0):.2f}秒")
+                
+                # 収益データ（エラーハンドリング付き）
+                if 'total_revenue' in ga4_summary and ga4_summary.get('total_revenue', 0) > 0:
+                    context_parts.append("")
+                    context_parts.append("【収益データ】")
+                    context_parts.append(f"総収益: ¥{ga4_summary['total_revenue']:,.0f}")
+                    if 'purchase_revenue' in ga4_summary and ga4_summary.get('purchase_revenue', 0) > 0:
+                        context_parts.append(f"購入収益: ¥{ga4_summary['purchase_revenue']:,.0f}")
+                    if 'revenue_per_session' in ga4_summary and ga4_summary.get('revenue_per_session', 0) > 0:
+                        context_parts.append(f"平均セッションあたり収益: ¥{ga4_summary['revenue_per_session']:,.0f}")
+                
+                # CVR（コンバージョン率）データ
+                if 'cvr' in ga4_summary and ga4_summary.get('cvr', 0) > 0:
+                    context_parts.append("")
+                    context_parts.append("【コンバージョン・CVRデータ】")
+                    if 'total_conversions' in ga4_summary:
+                        context_parts.append(f"総コンバージョン数: {ga4_summary['total_conversions']:,}")
+                    if 'total_purchases' in ga4_summary:
+                        context_parts.append(f"総購入数: {ga4_summary['total_purchases']:,}")
+                    context_parts.append(f"CVR（コンバージョン率）: {ga4_summary['cvr']:.2f}%")
+                
+                # アイテム購入数データ
+                if 'total_items_purchased' in ga4_summary and ga4_summary.get('total_items_purchased', 0) > 0:
+                    context_parts.append("")
+                    context_parts.append("【アイテム購入データ】")
+                    if 'total_item_purchases' in ga4_summary:
+                        context_parts.append(f"アイテム購入イベント数: {ga4_summary['total_item_purchases']:,}")
+                    context_parts.append(f"総アイテム購入数: {ga4_summary['total_items_purchased']:,}")
+                    if 'total_purchases' in ga4_summary and ga4_summary.get('total_purchases', 0) > 0:
+                        avg_items_per_purchase = ga4_summary['total_items_purchased'] / ga4_summary['total_purchases']
+                        context_parts.append(f"平均購入アイテム数: {avg_items_per_purchase:.2f}個")
+                
+                # チャネル別データ
+                if 'channel_data' in ga4_summary and ga4_summary.get('channel_data'):
+                    context_parts.append("")
+                    context_parts.append("【チャネル別パフォーマンス】")
+                    if 'top_channels_by_sessions' in ga4_summary and ga4_summary['top_channels_by_sessions']:
+                        context_parts.append("トップチャネル（セッション数順）:")
+                        for i, channel in enumerate(ga4_summary['top_channels_by_sessions'][:5], 1):
+                            context_parts.append(f"  {i}. {channel['channel']}: セッション数 {channel['sessions']:,}, 収益 ¥{channel['revenue']:,.0f}, CVR {channel['cvr']:.2f}%")
+                    if 'top_channels_by_revenue' in ga4_summary and ga4_summary['top_channels_by_revenue']:
+                        context_parts.append("")
+                        context_parts.append("トップチャネル（収益順）:")
+                        for i, channel in enumerate(ga4_summary['top_channels_by_revenue'][:5], 1):
+                            context_parts.append(f"  {i}. {channel['channel']}: 収益 ¥{channel['revenue']:,.0f}, セッション数 {channel['sessions']:,}, CVR {channel['cvr']:.2f}%")
+                
                 context_parts.append("")
             
             if "error" not in gsc_summary:
