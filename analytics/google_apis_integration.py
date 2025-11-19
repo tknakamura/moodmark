@@ -634,12 +634,15 @@ class GoogleAPIsIntegration:
                         dimensions.append('pagePath')
                         logger.info(f"pagePathディメンションを追加（フィルタ用）")
                     
+                    # GA4 Data API v1betaのdimensionFilter構造
+                    # FilterExpressionオブジェクトとして設定
                     dimension_filter = {
                         'filter': {
                             'fieldName': 'pagePath',
                             'stringFilter': {
                                 'matchType': 'BEGINS_WITH',
-                                'value': page_path_prefix
+                                'value': page_path_prefix,
+                                'caseSensitive': False
                             }
                         }
                     }
@@ -665,11 +668,14 @@ class GoogleAPIsIntegration:
             # API呼び出し
             logger.info(f"GA4 API呼び出し開始: プロパティID={self.ga4_property_id}, 期間={start_date}～{end_date}, ディメンション={dimensions}, サイト={site_name}")
             try:
+                import time
+                start_time = time.time()
                 response = self.ga4_service.properties().batchRunReports(
                     property=f'properties/{self.ga4_property_id}',
                     body=request
                 ).execute()
-                logger.info(f"GA4 API呼び出し完了: レスポンス受信")
+                elapsed_time = time.time() - start_time
+                logger.info(f"GA4 API呼び出し完了: レスポンス受信 (所要時間: {elapsed_time:.2f}秒)")
             except Exception as api_error:
                 logger.error(f"GA4 API呼び出しエラー: {api_error}", exc_info=True)
                 raise
@@ -787,12 +793,15 @@ class GoogleAPIsIntegration:
                         dimensions.append('pagePath')
                         logger.info(f"pagePathディメンションを追加（フィルタ用）")
                     
+                    # GA4 Data API v1betaのdimensionFilter構造
+                    # FilterExpressionオブジェクトとして設定
                     dimension_filter = {
                         'filter': {
                             'fieldName': 'pagePath',
                             'stringFilter': {
                                 'matchType': 'BEGINS_WITH',
-                                'value': page_path_prefix
+                                'value': page_path_prefix,
+                                'caseSensitive': False
                             }
                         }
                     }
@@ -817,10 +826,18 @@ class GoogleAPIsIntegration:
             
             # API呼び出し
             logger.info(f"GA4 API呼び出し開始: プロパティID={self.ga4_property_id}, 期間={start_date}～{end_date}, ディメンション={dimensions}, サイト={site_name}")
-            response = self.ga4_service.properties().batchRunReports(
-                property=f'properties/{self.ga4_property_id}',
-                body=request
-            ).execute()
+            try:
+                import time
+                start_time = time.time()
+                response = self.ga4_service.properties().batchRunReports(
+                    property=f'properties/{self.ga4_property_id}',
+                    body=request
+                ).execute()
+                elapsed_time = time.time() - start_time
+                logger.info(f"GA4 API呼び出し完了: レスポンス受信 (所要時間: {elapsed_time:.2f}秒)")
+            except Exception as api_error:
+                logger.error(f"GA4 API呼び出しエラー: {api_error}", exc_info=True)
+                raise
             
             # データの変換
             data = []
