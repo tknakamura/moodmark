@@ -689,14 +689,12 @@ def display_traffic_trend_chart(traffic_data):
             dtick=1
         ),
         yaxis=dict(
-            title='セッション',
-            titlefont=dict(color='#8884d8'),
+            title=dict(text='セッション', font=dict(color='#8884d8')),
             tickfont=dict(color='#8884d8'),
             side='left'
         ),
         yaxis2=dict(
-            title='トランザクション',
-            titlefont=dict(color='#82ca9d'),
+            title=dict(text='トランザクション', font=dict(color='#82ca9d')),
             tickfont=dict(color='#82ca9d'),
             overlaying='y',
             side='right'
