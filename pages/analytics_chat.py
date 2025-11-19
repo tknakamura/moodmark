@@ -10,6 +10,8 @@ import sys
 import os
 import warnings
 from datetime import datetime
+import plotly.graph_objects as go
+import pandas as pd
 
 # importlib.metadataエラーの警告を抑制
 warnings.filterwarnings('ignore', message='.*importlib.metadata.*packages_distributions.*')
@@ -596,6 +598,123 @@ def display_kpi_cards(kpi_data):
     
     st.markdown("---")
 
+def fetch_traffic_trend_data(date_range_days, start_date=None, end_date=None, site_name='moodmark'):
+    """トラフィック推移データを取得（日別）"""
+    if st.session_state.ai_chat is None:
+        return None
+    
+    try:
+        # GA4から日別データを取得
+        if start_date and end_date:
+            ga4_data = st.session_state.ai_chat.google_apis.get_ga4_data_custom_range(
+                start_date=start_date,
+                end_date=end_date,
+                metrics=['sessions', 'conversions'],
+                dimensions=['date'],
+                site_name=site_name
+            )
+        else:
+            ga4_data = st.session_state.ai_chat.google_apis.get_ga4_data(
+                date_range_days=date_range_days,
+                metrics=['sessions', 'conversions'],
+                dimensions=['date'],
+                site_name=site_name
+            )
+        
+        if ga4_data is None or ga4_data.empty:
+            return None
+        
+        # 日付でソート
+        if 'date' in ga4_data.columns:
+            ga4_data['date'] = pd.to_datetime(ga4_data['date'])
+            ga4_data = ga4_data.sort_values('date')
+        
+        return ga4_data
+    except Exception as e:
+        st.error(f"トラフィック推移データ取得エラー: {str(e)}")
+        return None
+
+def display_traffic_trend_chart(traffic_data):
+    """トラフィック推移グラフを表示"""
+    if traffic_data is None or traffic_data.empty:
+        return
+    
+    st.subheader("📈 トラフィック推移")
+    
+    # データの準備
+    if 'date' not in traffic_data.columns:
+        st.warning("日付データが見つかりません")
+        return
+    
+    # 日付を文字列に変換（表示用）
+    traffic_data['date_str'] = traffic_data['date'].dt.strftime('%Y%m%d')
+    
+    # セッション数とトランザクション数を取得
+    sessions = traffic_data['sessions'].values if 'sessions' in traffic_data.columns else []
+    transactions = traffic_data['conversions'].values if 'conversions' in traffic_data.columns else []
+    dates = traffic_data['date_str'].values
+    
+    # Plotlyでグラフを作成
+    fig = go.Figure()
+    
+    # セッションの折れ線（左Y軸）
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=sessions,
+        name='セッション',
+        line=dict(color='#8884d8', width=2),
+        mode='lines+markers',
+        marker=dict(size=4)
+    ))
+    
+    # トランザクションの折れ線（右Y軸）
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=transactions,
+        name='トランザクション',
+        line=dict(color='#82ca9d', width=2),
+        mode='lines+markers',
+        marker=dict(size=4),
+        yaxis='y2'
+    ))
+    
+    # レイアウト設定
+    fig.update_layout(
+        height=400,
+        xaxis=dict(
+            title='',
+            tickangle=-45,
+            tickmode='linear',
+            tick0=0,
+            dtick=1
+        ),
+        yaxis=dict(
+            title='セッション',
+            titlefont=dict(color='#8884d8'),
+            tickfont=dict(color='#8884d8'),
+            side='left'
+        ),
+        yaxis2=dict(
+            title='トランザクション',
+            titlefont=dict(color='#82ca9d'),
+            tickfont=dict(color='#82ca9d'),
+            overlaying='y',
+            side='right'
+        ),
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='right',
+            x=1
+        ),
+        hovermode='x unified',
+        margin=dict(l=50, r=50, t=50, b=100)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown("---")
+
 # KPIカードの表示（AIチャットが初期化されている場合のみ）
 if st.session_state.ai_chat is not None:
     with st.spinner("KPIデータを取得中..."):
@@ -607,6 +726,17 @@ if st.session_state.ai_chat is not None:
         )
         if kpi_data:
             display_kpi_cards(kpi_data)
+    
+    # トラフィック推移グラフの表示
+    with st.spinner("トラフィック推移データを取得中..."):
+        traffic_data = fetch_traffic_trend_data(
+            date_range_days=st.session_state.date_range_days,
+            start_date=st.session_state.start_date,
+            end_date=st.session_state.end_date,
+            site_name=st.session_state.selected_site
+        )
+        if traffic_data is not None and not traffic_data.empty:
+            display_traffic_trend_chart(traffic_data)
 
 # メインエリア
 # チャット履歴の表示

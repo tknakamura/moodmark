@@ -11,6 +11,7 @@ google-api-python-client==2.108.0
 
 # Analytics
 schedule==1.2.0
+plotly>=5.17.0
 
 # Notion Integration
 notion-client==2.2.1
