@@ -39,6 +39,27 @@ st.set_page_config(
 st.title("📊 GA4/GSC AI分析チャット")
 st.markdown("Google Analytics 4とGoogle Search ConsoleのデータをAIが分析し、質問にお答えします。")
 
+# セッション状態の初期化（最初に実行）
+from datetime import datetime, timedelta
+
+# 各属性を個別に初期化（順序に依存しない）
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "ai_chat" not in st.session_state:
+    st.session_state.ai_chat = None
+if "model" not in st.session_state:
+    st.session_state.model = "gpt-4o-mini"
+if "date_range_days" not in st.session_state:
+    st.session_state.date_range_days = 30
+if "start_date" not in st.session_state:
+    st.session_state.start_date = None
+if "end_date" not in st.session_state:
+    st.session_state.end_date = None
+if "keyword" not in st.session_state:
+    st.session_state.keyword = ""
+if "landing_page" not in st.session_state:
+    st.session_state.landing_page = ""
+
 # 日付範囲選択ボタン
 col1, col2, col3, col4 = st.columns([1, 1, 1, 3])
 with col1:
@@ -61,7 +82,6 @@ with col3:
         st.rerun()
 
 # 日付範囲の表示
-from datetime import datetime, timedelta
 if st.session_state.start_date and st.session_state.end_date:
     date_range_text = f"期間: {st.session_state.start_date} 〜 {st.session_state.end_date}"
 else:
@@ -70,26 +90,6 @@ else:
     date_range_text = f"期間: {start_date} 〜 {end_date} (過去{st.session_state.date_range_days}日間)"
 st.caption(date_range_text)
 st.markdown("---")
-
-# セッション状態の初期化
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.ai_chat = None
-    st.session_state.model = "gpt-4o-mini"
-    st.session_state.date_range_days = 30
-    st.session_state.start_date = None
-    st.session_state.end_date = None
-    st.session_state.keyword = ""
-    st.session_state.landing_page = ""
-
-# 日付範囲の初期化
-from datetime import datetime, timedelta
-if "date_range_days" not in st.session_state:
-    st.session_state.date_range_days = 30
-if "start_date" not in st.session_state:
-    st.session_state.start_date = None
-if "end_date" not in st.session_state:
-    st.session_state.end_date = None
 
 # サイドバー設定
 with st.sidebar:
