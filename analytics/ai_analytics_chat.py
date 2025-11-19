@@ -400,11 +400,12 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             # サイト全体のデータを取得する場合
             logger.info(f"GA4データ取得開始: 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
             
-            # 拡張メトリクスを取得（収益、コンバージョン、アイテム購入を含む）
+            # 拡張メトリクスを取得（収益、コンバージョンを含む）
             # GA4 APIでは 'users' ではなく 'activeUsers'、'pageviews' ではなく 'screenPageViews' を使用
+            # 注意: 'purchases', 'itemPurchases', 'itemsPurchased'はGA4 Data APIでは無効なメトリクスです
             extended_metrics = [
                 'sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration',
-                'conversions', 'purchases', 'totalRevenue', 'purchaseRevenue', 'itemPurchases', 'itemsPurchased'
+                'conversions', 'totalRevenue', 'purchaseRevenue'
             ]
             extended_dimensions = ['date', 'sessionDefaultChannelGroup']
             
@@ -471,12 +472,14 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             
             # コンバージョンデータの集計
             total_conversions = 0
-            total_purchases = 0
+            # 注意: 'purchases'はGA4 Data APIでは無効なメトリクスです
+            # 購入数は'conversions'から推測するか、イベントベースで取得する必要があります
+            total_purchases = 0  # 購入イベント数は別途取得が必要
             try:
                 if 'conversions' in ga4_data.columns:
                     total_conversions = int(ga4_data['conversions'].sum())
-                if 'purchases' in ga4_data.columns:
-                    total_purchases = int(ga4_data['purchases'].sum())
+                    # conversionsを購入数として使用（購入コンバージョンが設定されている場合）
+                    total_purchases = total_conversions
             except (KeyError, ValueError, TypeError) as e:
                 logger.warning(f"コンバージョンデータの集計エラー: {e}")
             
@@ -486,15 +489,10 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                 cvr = (total_conversions / total_sessions) * 100
             
             # アイテム購入数の集計
+            # 注意: 'itemPurchases'と'itemsPurchased'はGA4 Data APIでは無効なメトリクスです
+            # これらのデータはイベントベースで取得する必要があります
             total_item_purchases = 0
             total_items_purchased = 0
-            try:
-                if 'itemPurchases' in ga4_data.columns:
-                    total_item_purchases = int(ga4_data['itemPurchases'].sum())
-                if 'itemsPurchased' in ga4_data.columns:
-                    total_items_purchased = int(ga4_data['itemsPurchased'].sum())
-            except (KeyError, ValueError, TypeError) as e:
-                logger.warning(f"アイテム購入データの集計エラー: {e}")
             
             # 平均セッションあたり収益の計算
             revenue_per_session = 0.0
@@ -508,8 +506,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                     channel_grouped = ga4_data.groupby('sessionDefaultChannelGroup').agg({
                         'sessions': 'sum',
                         'conversions': 'sum',
-                        'totalRevenue': 'sum',
-                        'purchases': 'sum'
+                        'totalRevenue': 'sum'
                     }).reset_index()
                     
                     for _, row in channel_grouped.iterrows():
@@ -517,7 +514,8 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                         channel_sessions = int(row['sessions']) if pd.notna(row['sessions']) else 0
                         channel_conversions = int(row['conversions']) if pd.notna(row['conversions']) else 0
                         channel_revenue = float(row['totalRevenue']) if pd.notna(row['totalRevenue']) else 0.0
-                        channel_purchases = int(row['purchases']) if pd.notna(row['purchases']) else 0
+                        # 購入数はconversionsから推測（購入コンバージョンが設定されている場合）
+                        channel_purchases = channel_conversions
                         
                         # チャネル別CVRの計算
                         channel_cvr = 0.0

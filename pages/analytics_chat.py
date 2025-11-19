@@ -481,7 +481,7 @@ def fetch_kpi_data(date_range_days, start_date=None, end_date=None, site_name='m
         return {
             'current': {
                 'sessions': ga4_summary.get('total_sessions', 0),
-                'transactions': ga4_summary.get('total_purchases', 0),
+                'transactions': ga4_summary.get('total_purchases', 0) or ga4_summary.get('total_conversions', 0),  # purchasesが無効な場合はconversionsを使用
                 'cvr': ga4_summary.get('cvr', 0.0),
                 'organic_sessions': organic_sessions,
                 'gsc_clicks': gsc_summary.get('total_clicks', 0),
@@ -491,7 +491,7 @@ def fetch_kpi_data(date_range_days, start_date=None, end_date=None, site_name='m
             },
             'previous': {
                 'sessions': prev_ga4_summary.get('total_sessions', 0),
-                'transactions': prev_ga4_summary.get('total_purchases', 0),
+                'transactions': prev_ga4_summary.get('total_purchases', 0) or prev_ga4_summary.get('total_conversions', 0),  # purchasesが無効な場合はconversionsを使用
                 'cvr': prev_ga4_summary.get('cvr', 0.0),
                 'organic_sessions': prev_organic_sessions,
                 'gsc_clicks': prev_gsc_summary.get('total_clicks', 0),

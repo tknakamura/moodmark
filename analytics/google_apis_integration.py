@@ -596,11 +596,8 @@ class GoogleAPIsIntegration:
                 'bounceRate',
                 'averageSessionDuration',
                 'conversions',
-                'purchases',
                 'totalRevenue',
-                'purchaseRevenue',
-                'itemPurchases',
-                'itemsPurchased'
+                'purchaseRevenue'
             ]
         
         # デフォルトディメンション
@@ -756,11 +753,8 @@ class GoogleAPIsIntegration:
                 'bounceRate',
                 'averageSessionDuration',
                 'conversions',
-                'purchases',
                 'totalRevenue',
-                'purchaseRevenue',
-                'itemPurchases',
-                'itemsPurchased'
+                'purchaseRevenue'
             ]
         
         # デフォルトディメンション
