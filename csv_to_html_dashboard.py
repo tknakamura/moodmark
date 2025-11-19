@@ -94,43 +94,43 @@ class CSVToHTMLConverter:
         self.ranking_cgid = ranking_cgid  # ランキングスライダーに使用するcgid
     
     def _load_html_template(self):
-        """HTMLテンプレートを読み込み"""
+        """HTMLテンプレートを読み込み（0歳・1歳クリスマス記事ベース）"""
         return """
 <link rel="stylesheet" type="text/css" href="assets/css/c_article.css?$staticlink$">
 
 <script src="assets/js/jquery.min.js?$staticlink$"></script>
 <div class="breadcrumb">
-  <ol>
-    <li><a href="$url('Home-Show')$">HOME</a></li>
-    <li><a href="$url('Search-Show','cgid','S010100')$">結婚祝い特集</a></li>
-    <li>結婚祝いに人気のお菓子・スイーツ</li>
-  </ol>
+    <ol>
+        <li><a href="$url('Home-Show')$">HOME</a></li>
+        <li><a href="$url('Search-Show','cgid','J011600')$" class="btn_link">クリスマスプレゼント特集 2025年</a></li>
+        <li>【子ども】0歳·1歳の赤ちゃんに贈るクリスマスプレゼント特集</li>
+    </ol>
 </div>
-<div class="recommended">
-  <a href="" class="item non-active">おすすめ商品特集を読む</a>
-  <a href="$url('Search-Show','cgid','I0101')$" class="item ">おすすめ商品一覧を見る</a>
-</div>
-<section class="article_c article">
+<!-- <div class="recommended">
+    <a href="" class="item non-active">おすすめ商品特集を読む</a>
+    <a href="$url('Search-Show','cgid','I010101')$" class="item">おすすめ商品一覧を見る</a>
+</div> -->
+<br><br>
 
   <!-- メインエリア ここから -->
-  <br><br>
+ <section class="article_c article">
+
   <!-- メインエリア-タイトル ここから -->
-  <div class="article_title">
-    <h1 class="article_title_txt">{title}
-<br class="pc">{title_part2}</h1>
-  </div>
+    <div class="article_title">
+        <h1 class="article_title_txt">{h1_title}</h1>
+    </div>
   <!-- メインエリア-タイトル ここまで -->
 
   <div class="article_container">
     <div class="article_container_box">
 
-      <!-- メインエリア-メインビジュアル ここから -->
-      <div class="article_container_box_img mv">
-        <img src="assets/images/top/img_dummy.gif?$staticlink$"
-          data-echo="assets/images/s_article/S010117_main.jpg?$staticlink$"
-          alt="結婚祝いに人気のお菓子ランキング＆高級かつおしゃれなおすすめスイーツギフト特集">
-      </div>
-      <!-- メインエリア-メインビジュアル ここまで -->
+            <!-- メインエリア-メインビジュアル ここから -->
+            <div class="article_container_box_img mv">
+                <img src="assets/images/top/img_dummy.gif?$staticlink$"
+                     data-echo="assets/images/s_article/J011636_2025_main.jpg?$staticlink$"
+                     alt="{h1_title}">
+            </div>
+            <!-- メインエリア-メインビジュアル ここまで -->
 
       <!-- メインエリア-日付 ここから -->
       <div class="day">
@@ -153,7 +153,7 @@ class CSVToHTMLConverter:
           {index_list}
         </ul>
         <div class="article_container_box_index_btn btn transparent-red">
-          <a href="https://isetan.mistore.jp/moodmark/wedding/" class="btn_link">結婚祝い特集を見る</a>
+          <a href="https://isetan.mistore.jp/moodmark/christmas/" class="btn_link">クリスマス特集を見る</a>
         </div>
       </div>
       <!-- メインエリア-索引 ここまで -->
@@ -377,6 +377,7 @@ class CSVToHTMLConverter:
             # データを整理
             parsed_data = {
                 'title': '',
+                'h1_title': '',
                 'description': '',
                 'sections': [],
                 'index_items': []
@@ -395,6 +396,8 @@ class CSVToHTMLConverter:
                     parsed_data['title'] = title_text
                 elif tag == 'description':
                     parsed_data['description'] = title_text
+                elif tag == 'H1':
+                    parsed_data['h1_title'] = title_text
                 elif tag == 'H2':
                     # 新しいセクション開始
                     if current_section:
@@ -740,13 +743,11 @@ class CSVToHTMLConverter:
                                         content += f'''
   <p class="text">{h4_item['description']}</p>
 '''
-                                    content += '''
+                                    content += f'''
   <!-- スライダーコンテナ ここから -->
   <div class="slider-container">
         <h4 class="slider-title">
-            <span class="sub">
-                <span class="text">'''+ h4_item['title'] + '''</span>
-            </span>
+            <span class="sub">{h4_item['title']}</span>
             <span class="main">
                 <span class="text">DISCOVER MORE</span>
             </span>
@@ -818,9 +819,12 @@ class CSVToHTMLConverter:
             
             # HTMLテンプレートに値を挿入（文字列置換を使用）
             html_output = self.html_template
+            # h1_titleを優先的に使用（存在しない場合はtitleを使用）
+            h1_title = parsed_data.get('h1_title', parsed_data.get('title', ''))
+            html_output = html_output.replace('{h1_title}', h1_title)
             html_output = html_output.replace('{title}', title_part1)
             html_output = html_output.replace('{title_part2}', title_part2)
-            html_output = html_output.replace('{description}', parsed_data['description'])
+            html_output = html_output.replace('{description}', parsed_data.get('description', ''))
             html_output = html_output.replace('{index_list}', index_list)
             html_output = html_output.replace('{content}', content)
             html_output = html_output.replace('{date}', date_str)
