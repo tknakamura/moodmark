@@ -604,19 +604,19 @@ def fetch_traffic_trend_data(date_range_days, start_date=None, end_date=None, si
         return None
     
     try:
-        # GA4から日別データを取得
+        # GA4から日別データを取得（eコマース購入数を使用）
         if start_date and end_date:
             ga4_data = st.session_state.ai_chat.google_apis.get_ga4_data_custom_range(
                 start_date=start_date,
                 end_date=end_date,
-                metrics=['sessions', 'conversions'],
+                metrics=['sessions', 'ecommercePurchases'],
                 dimensions=['date'],
                 site_name=site_name
             )
         else:
             ga4_data = st.session_state.ai_chat.google_apis.get_ga4_data(
                 date_range_days=date_range_days,
-                metrics=['sessions', 'conversions'],
+                metrics=['sessions', 'ecommercePurchases'],
                 dimensions=['date'],
                 site_name=site_name
             )
@@ -633,7 +633,7 @@ def fetch_traffic_trend_data(date_range_days, start_date=None, end_date=None, si
         if 'date' in ga4_data.columns:
             ga4_data = ga4_data.groupby('date').agg({
                 'sessions': 'sum',
-                'conversions': 'sum'
+                'ecommercePurchases': 'sum'
             }).reset_index()
         
         return ga4_data
@@ -669,8 +669,8 @@ def display_traffic_trend_chart(traffic_data):
             else:
                 sessions.append(0.0)
             
-            # トランザクション数を取得（conversionsから、数値に変換）
-            transaction_val = row.get('conversions', 0)
+            # eコマース購入数を取得（ecommercePurchasesから、数値に変換）
+            transaction_val = row.get('ecommercePurchases', 0)
             if pd.notna(transaction_val):
                 transactions.append(float(transaction_val))
             else:
