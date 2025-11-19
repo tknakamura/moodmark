@@ -179,10 +179,12 @@ class GoogleAPIsIntegration:
             authorized_http = google_auth_httplib2.AuthorizedHttp(self.credentials, http=http)
             
             # GA4 APIサービス構築（タイムアウト付きHTTPオブジェクトを使用）
-            self.ga4_service = build('analyticsdata', 'v1beta', credentials=self.credentials, http=authorized_http)
+            # 注意: AuthorizedHttpは既に認証情報を含んでいるため、credentialsパラメータは不要
+            self.ga4_service = build('analyticsdata', 'v1beta', http=authorized_http)
             
             # GSC APIサービス構築（タイムアウト付きHTTPオブジェクトを使用）
-            self.gsc_service = build('searchconsole', 'v1', credentials=self.credentials, http=authorized_http)
+            # 注意: AuthorizedHttpは既に認証情報を含んでいるため、credentialsパラメータは不要
+            self.gsc_service = build('searchconsole', 'v1', http=authorized_http)
             
             logger.info("Google APIs認証完了（タイムアウト: 60秒）")
             
