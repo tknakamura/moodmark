@@ -572,10 +572,10 @@ class GoogleAPIsIntegration:
             # API呼び出し
             logger.info(f"GA4 API呼び出し開始: プロパティID={self.ga4_property_id}, 期間={start_date}～{end_date}, ディメンション={dimensions}")
             try:
-            response = self.ga4_service.properties().batchRunReports(
-                property=f'properties/{self.ga4_property_id}',
-                body=request
-            ).execute()
+                response = self.ga4_service.properties().batchRunReports(
+                    property=f'properties/{self.ga4_property_id}',
+                    body=request
+                ).execute()
                 logger.info(f"GA4 API呼び出し完了: レスポンス受信")
             except Exception as api_error:
                 logger.error(f"GA4 API呼び出しエラー: {api_error}", exc_info=True)
