@@ -36,6 +36,26 @@ class GoogleAPIsIntegration:
         # 環境変数から設定を取得
         self.ga4_property_id = os.getenv('GA4_PROPERTY_ID')
         
+        # analytics_config.jsonから設定を読み込む
+        self.config_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'analytics_config.json')
+        self.site_configs = {}
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    sites = config.get('sites', {})
+                    # サイト設定を読み込む
+                    for site_key, site_config in sites.items():
+                        # キーを正規化（moodmark_idea -> moodmarkgift）
+                        normalized_key = 'moodmarkgift' if site_key == 'moodmark_idea' else site_key
+                        self.site_configs[normalized_key] = {
+                            'ga4_property_id': site_config.get('ga4_property_id'),
+                            'gsc_site_url': site_config.get('gsc_site_url')
+                        }
+                    logger.info(f"analytics_config.jsonから設定を読み込みました: {list(self.site_configs.keys())}")
+        except Exception as e:
+            logger.warning(f"analytics_config.jsonの読み込みエラー: {e}")
+        
         # 複数GSCサイトURLの読み込み
         self.gsc_site_urls = {
             'moodmark': os.getenv('GSC_SITE_URL_MOODMARK') or os.getenv('GSC_SITE_URL') or 'https://isetan.mistore.jp/moodmark/',
@@ -44,9 +64,52 @@ class GoogleAPIsIntegration:
         # 後方互換性のため、既存のgsc_site_urlも保持
         self.gsc_site_url = self.gsc_site_urls.get('moodmark')
         
+        # 複数GA4プロパティIDの読み込み
+        self.ga4_property_ids = {}
+        for site_key in ['moodmark', 'moodmarkgift']:
+            # 環境変数から取得を試行
+            env_key = f'GA4_PROPERTY_ID_{site_key.upper()}'
+            property_id = os.getenv(env_key)
+            # 環境変数がない場合はconfigから取得
+            if not property_id and site_key in self.site_configs:
+                property_id = self.site_configs[site_key].get('ga4_property_id')
+            # それでもない場合はデフォルトの環境変数を使用
+            if not property_id:
+                property_id = os.getenv('GA4_PROPERTY_ID')
+            self.ga4_property_ids[site_key] = property_id
+            logger.info(f"GA4プロパティID ({site_key}): {property_id}")
+        
+        # デフォルトのプロパティIDを設定（環境変数またはmoodmarkの設定）
+        if not self.ga4_property_id:
+            self.ga4_property_id = self.ga4_property_ids.get('moodmark')
+        
         self.pagespeed_api_key = os.getenv('PAGESPEED_INSIGHTS_API_KEY')
         
         self._authenticate()
+    
+    def set_site(self, site_name: str):
+        """
+        サイト名に応じてGA4プロパティIDとGSCサイトURLを設定
+        
+        Args:
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')
+        """
+        # 正規化（moodmark_idea -> moodmarkgift）
+        normalized_site = 'moodmarkgift' if site_name == 'moodmark_idea' else site_name
+        
+        # GA4プロパティIDを設定
+        if normalized_site in self.ga4_property_ids:
+            self.ga4_property_id = self.ga4_property_ids[normalized_site]
+            logger.info(f"GA4プロパティIDを設定: {normalized_site} -> {self.ga4_property_id}")
+        else:
+            logger.warning(f"サイト '{normalized_site}' のGA4プロパティIDが見つかりません。デフォルトを使用します。")
+        
+        # GSCサイトURLを設定
+        if normalized_site in self.gsc_site_urls:
+            self.gsc_site_url = self.gsc_site_urls[normalized_site]
+            logger.info(f"GSCサイトURLを設定: {normalized_site} -> {self.gsc_site_url}")
+        else:
+            logger.warning(f"サイト '{normalized_site}' のGSCサイトURLが見つかりません。デフォルトを使用します。")
     
     def _authenticate(self):
         """Google APIs認証"""

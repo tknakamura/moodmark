@@ -324,7 +324,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
         # デフォルトは30日
         return (None, None, 30)
     
-    def _get_ga4_summary(self, date_range_days: int, start_date: str = None, end_date: str = None, page_url: str = None) -> Dict[str, Any]:
+    def _get_ga4_summary(self, date_range_days: int, start_date: str = None, end_date: str = None, page_url: str = None, site_name: str = None) -> Dict[str, Any]:
         """
         GA4データのサマリーを取得
         
@@ -333,11 +333,16 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             start_date (str): 開始日 (YYYY-MM-DD形式、オプション)
             end_date (str): 終了日 (YYYY-MM-DD形式、オプション)
             page_url (str): ページURL（オプション、指定された場合は個別ページのデータを取得）
+            site_name (str): サイト名 ('moodmark' または 'moodmarkgift')、指定された場合はプロパティIDを設定
             
         Returns:
             dict: サマリーデータ
         """
         try:
+            # サイト名が指定された場合は、プロパティIDを設定
+            if site_name:
+                self.google_apis.set_site(site_name)
+                logger.info(f"GA4プロパティIDを設定: {site_name} -> {self.google_apis.ga4_property_id}")
             # 個別ページのデータを取得する場合
             if page_url:
                 logger.info(f"個別ページのGA4データ取得開始: URL={page_url}, 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
@@ -1612,9 +1617,12 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             logger.info(f"GA4データが必要と判定されました。取得を開始...")
             if progress_callback:
                 progress_callback("[STEP] 📈 GA4データを取得中...\n")
+            # サイト名が指定されている場合は、プロパティIDを設定
+            if site_name:
+                self.google_apis.set_site(site_name)
             # URLが指定されている場合は個別ページのデータを取得
             page_url_for_ga4 = urls[0] if urls else None
-            ga4_summary = self._get_ga4_summary(date_range, start_date, end_date, page_url=page_url_for_ga4)
+            ga4_summary = self._get_ga4_summary(date_range, start_date, end_date, page_url=page_url_for_ga4, site_name=site_name)
             
             step_elapsed = time.time() - step_start_time
             logger.info(f"GA4データ取得完了: {step_elapsed:.2f}秒")
@@ -1775,7 +1783,10 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
         if not context_parts:
             # デフォルトで両方のデータを取得
             logger.info("デフォルトデータ取得モード: GA4とGSCデータを取得")
-            ga4_summary = self._get_ga4_summary(date_range)
+            # サイト名が指定されている場合は、プロパティIDを設定
+            if site_name:
+                self.google_apis.set_site(site_name)
+            ga4_summary = self._get_ga4_summary(date_range, site_name=site_name)
             gsc_summary = self._get_gsc_summary(date_range, site_name=site_name)
             
             if "error" not in ga4_summary:

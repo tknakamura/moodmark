@@ -427,10 +427,14 @@ def fetch_kpi_data(date_range_days, start_date=None, end_date=None, site_name='m
             ga4_summary = st.session_state.ai_chat._get_ga4_summary(
                 date_range_days=(datetime.strptime(end_date, '%Y-%m-%d') - datetime.strptime(start_date, '%Y-%m-%d')).days + 1,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                site_name=site_name
             )
         else:
-            ga4_summary = st.session_state.ai_chat._get_ga4_summary(date_range_days=date_range_days)
+            ga4_summary = st.session_state.ai_chat._get_ga4_summary(
+                date_range_days=date_range_days,
+                site_name=site_name
+            )
         
         if start_date and end_date:
             gsc_summary = st.session_state.ai_chat._get_gsc_summary(
@@ -452,7 +456,8 @@ def fetch_kpi_data(date_range_days, start_date=None, end_date=None, site_name='m
         prev_ga4_summary = st.session_state.ai_chat._get_ga4_summary(
             date_range_days=prev_days,
             start_date=prev_start,
-            end_date=prev_end
+            end_date=prev_end,
+            site_name=site_name
         )
         
         prev_gsc_summary = st.session_state.ai_chat._get_gsc_summary(
