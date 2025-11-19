@@ -61,6 +61,8 @@ if "keyword" not in st.session_state:
     st.session_state.keyword = ""
 if "landing_page" not in st.session_state:
     st.session_state.landing_page = ""
+if "comparison_mode" not in st.session_state:
+    st.session_state.comparison_mode = "year_over_year"  # デフォルトは前年同時期対比
 
 # 日付範囲選択ボタン
 col1, col2, col3, col4 = st.columns([1, 1, 1, 3])
@@ -400,23 +402,41 @@ with st.sidebar:
             st.rerun()
 
 # KPIカード表示機能
-def get_previous_date_range(date_range_days, start_date=None, end_date=None):
-    """前期間の日付範囲を計算"""
+def get_previous_date_range(date_range_days, start_date=None, end_date=None, comparison_mode='year_over_year'):
+    """
+    比較期間の日付範囲を計算
+    
+    Args:
+        date_range_days: 日数
+        start_date: 開始日（オプション）
+        end_date: 終了日（オプション）
+        comparison_mode: 比較モード ('year_over_year': 前年同時期, 'previous_period': 前期間)
+    
+    Returns:
+        tuple: (prev_start, prev_end) の文字列タプル
+    """
     from datetime import datetime, timedelta
+    from dateutil.relativedelta import relativedelta
+    
     if start_date and end_date:
         start = datetime.strptime(start_date, '%Y-%m-%d')
         end = datetime.strptime(end_date, '%Y-%m-%d')
         days_diff = (end - start).days + 1
-        prev_end = start - timedelta(days=1)
-        prev_start = prev_end - timedelta(days=days_diff - 1)
-        return prev_start.strftime('%Y-%m-%d'), prev_end.strftime('%Y-%m-%d')
     else:
         end = datetime.now()
         start = end - timedelta(days=date_range_days - 1)
         days_diff = date_range_days
+    
+    if comparison_mode == 'year_over_year':
+        # 前年同時期対比
+        prev_start = start - relativedelta(years=1)
+        prev_end = end - relativedelta(years=1)
+    else:
+        # 前期間対比
         prev_end = start - timedelta(days=1)
         prev_start = prev_end - timedelta(days=days_diff - 1)
-        return prev_start.strftime('%Y-%m-%d'), prev_end.strftime('%Y-%m-%d')
+    
+    return prev_start.strftime('%Y-%m-%d'), prev_end.strftime('%Y-%m-%d')
 
 def fetch_kpi_data(date_range_days, start_date=None, end_date=None, site_name='moodmark'):
     """KPIデータを取得"""
@@ -451,8 +471,14 @@ def fetch_kpi_data(date_range_days, start_date=None, end_date=None, site_name='m
                 site_name=site_name
             )
         
-        # 前期間のデータ取得
-        prev_start, prev_end = get_previous_date_range(date_range_days, start_date, end_date)
+        # 比較期間のデータ取得（比較モードに応じて前年同時期または前期間）
+        comparison_mode = st.session_state.get('comparison_mode', 'year_over_year')
+        prev_start, prev_end = get_previous_date_range(
+            date_range_days, 
+            start_date, 
+            end_date, 
+            comparison_mode=comparison_mode
+        )
         prev_days = (datetime.strptime(prev_end, '%Y-%m-%d') - datetime.strptime(prev_start, '%Y-%m-%d')).days + 1
         
         prev_ga4_summary = st.session_state.ai_chat._get_ga4_summary(
@@ -512,7 +538,7 @@ def display_kpi_cards(kpi_data):
         return
     
     def calculate_comparison(current, previous, is_lower_better=False):
-        """前期間対比を計算"""
+        """比較対比を計算"""
         if previous == 0:
             return None, None
         diff = current - previous
@@ -524,6 +550,31 @@ def display_kpi_cards(kpi_data):
     
     # KPIカードを表示
     st.subheader("📊 KPIダッシュボード")
+    
+    # 比較モード選択
+    comparison_mode = st.session_state.get('comparison_mode', 'year_over_year')
+    col1, col2, col3 = st.columns([2, 2, 6])
+    with col1:
+        new_comparison_mode = st.radio(
+            "比較モード",
+            options=['year_over_year', 'previous_period'],
+            format_func=lambda x: '前年同時期対比' if x == 'year_over_year' else '前期間対比',
+            index=0 if comparison_mode == 'year_over_year' else 1,
+            horizontal=True,
+            key='comparison_mode_radio'
+        )
+        if new_comparison_mode != comparison_mode:
+            st.session_state.comparison_mode = new_comparison_mode
+            st.rerun()
+    
+    # 比較期間の表示
+    with col2:
+        if comparison_mode == 'year_over_year':
+            st.caption("📅 前年同時期と比較")
+        else:
+            st.caption("📅 前期間と比較")
+    
+    st.markdown("---")
     
     # 8つのKPIカードを2行4列で表示
     kpi_cols = st.columns(4)
