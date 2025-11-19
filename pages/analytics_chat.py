@@ -1039,6 +1039,217 @@ def display_keyword_ranking(current_queries, prev_queries):
     components.html(html_table, height=1200, scrolling=True)
     st.markdown("---")
 
+def fetch_page_ranking_data(date_range_days, start_date=None, end_date=None, site_name='moodmark'):
+    """ページランキングデータを取得（現在期間と比較期間）"""
+    if st.session_state.ai_chat is None:
+        return None, None
+    
+    try:
+        # 現在期間のページデータ取得
+        if start_date and end_date:
+            current_pages = st.session_state.ai_chat.google_apis.get_top_pages_gsc(
+                start_date=start_date,
+                end_date=end_date,
+                limit=30,
+                site_name=site_name
+            )
+        else:
+            current_pages = st.session_state.ai_chat.google_apis.get_top_pages_gsc(
+                date_range_days=date_range_days,
+                limit=30,
+                site_name=site_name
+            )
+        
+        # 比較期間のページデータ取得
+        comparison_mode = st.session_state.get('comparison_mode', 'year_over_year')
+        prev_start, prev_end = get_previous_date_range(
+            date_range_days,
+            start_date,
+            end_date,
+            comparison_mode=comparison_mode
+        )
+        
+        prev_pages = st.session_state.ai_chat.google_apis.get_top_pages_gsc(
+            start_date=prev_start,
+            end_date=prev_end,
+            limit=100,  # 比較用に多めに取得
+            site_name=site_name
+        )
+        
+        return current_pages, prev_pages
+    except Exception as e:
+        st.error(f"ページランキングデータ取得エラー: {str(e)}")
+        return None, None
+
+def display_page_ranking(current_pages, prev_pages):
+    """ページランキングテーブルを表示"""
+    if current_pages is None or current_pages.empty:
+        return
+    
+    st.subheader("📄 ページランキング（上位30件）")
+    
+    # 比較期間のデータを辞書に変換（高速検索用）
+    prev_dict = {}
+    if prev_pages is not None and not prev_pages.empty:
+        for _, row in prev_pages.iterrows():
+            page = row.get('page', '')
+            if page:
+                prev_dict[page] = {
+                    'clicks': row.get('clicks', 0),
+                    'impressions': row.get('impressions', 0),
+                    'ctr_calculated': row.get('ctr_calculated', 0.0),
+                    'avg_position': row.get('avg_position', 0.0)
+                }
+    
+    # テーブルデータの準備
+    table_data = []
+    for idx, row in current_pages.iterrows():
+        page = row.get('page', '')
+        current_clicks = int(row.get('clicks', 0))
+        current_impressions = int(row.get('impressions', 0))
+        current_ctr = float(row.get('ctr_calculated', 0.0))
+        current_position = float(row.get('avg_position', 0.0))
+        
+        # 比較期間のデータを取得
+        prev_data = prev_dict.get(page, {})
+        prev_clicks = prev_data.get('clicks', 0)
+        prev_impressions = prev_data.get('impressions', 0)
+        prev_ctr = prev_data.get('ctr_calculated', 0.0)
+        prev_position = prev_data.get('avg_position', 0.0)
+        
+        # 差分とパーセンテージを計算
+        clicks_diff = current_clicks - prev_clicks
+        clicks_percent = (clicks_diff / prev_clicks * 100) if prev_clicks > 0 else None
+        
+        impressions_diff = current_impressions - prev_impressions
+        impressions_percent = (impressions_diff / prev_impressions * 100) if prev_impressions > 0 else None
+        
+        ctr_diff = current_ctr - prev_ctr
+        ctr_percent = (ctr_diff / prev_ctr * 100) if prev_ctr > 0 else None
+        
+        position_diff = current_position - prev_position
+        position_percent = (position_diff / prev_position * 100) if prev_position > 0 else None
+        
+        table_data.append({
+            '順位': idx + 1,
+            'ページ': page,
+            'クリック': {
+                'current': current_clicks,
+                'diff': clicks_diff,
+                'percent': clicks_percent,
+                'prev': prev_clicks
+            },
+            'インプレッション': {
+                'current': current_impressions,
+                'diff': impressions_diff,
+                'percent': impressions_percent,
+                'prev': prev_impressions
+            },
+            'CTR': {
+                'current': current_ctr,
+                'diff': ctr_diff,
+                'percent': ctr_percent,
+                'prev': prev_ctr
+            },
+            'ポジション': {
+                'current': current_position,
+                'diff': position_diff,
+                'percent': position_percent,
+                'prev': prev_position
+            }
+        })
+    
+    # 色の決定関数
+    def get_color(diff, is_lower_better=False):
+        if diff is None or diff == 0:
+            return "#6b7280"  # gray
+        if is_lower_better:
+            return "#10b981" if diff < 0 else "#ef4444"  # ポジション: 下がる=緑、上がる=赤
+        else:
+            return "#10b981" if diff > 0 else "#ef4444"  # その他: 上がる=緑、下がる=赤
+    
+    # 差分表示の準備関数
+    def format_delta(diff, percent, prev_value):
+        if diff is None or percent is None or prev_value == 0:
+            return ""
+        sign = "+" if diff >= 0 else ""
+        color = get_color(diff)
+        return f'<div style="color: {color}; font-size: 12px;">{sign}{diff:,.0f} ({percent:+.1f}%)</div>'
+    
+    def format_delta_ctr(diff, percent, prev_value):
+        if diff is None or percent is None or prev_value == 0:
+            return ""
+        sign = "+" if diff >= 0 else ""
+        color = get_color(diff)
+        return f'<div style="color: {color}; font-size: 12px;">{sign}{diff:.2f}% ({percent:+.1f}%)</div>'
+    
+    def format_delta_position(diff, percent, prev_value):
+        if diff is None or percent is None or prev_value == 0:
+            return ""
+        sign = "+" if diff >= 0 else ""
+        color = get_color(diff, is_lower_better=True)
+        return f'<div style="color: {color}; font-size: 12px;">{sign}{diff:.1f} ({percent:+.1f}%)</div>'
+    
+    # Streamlitのテーブルで表示（カスタムHTMLを使用）
+    html_table = """
+    <div style="overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+    <thead>
+        <tr style="background-color: #f3f4f6;">
+            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 600;">順位</th>
+            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 600;">ページ</th>
+            <th style="padding: 12px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600;">クリック</th>
+            <th style="padding: 12px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600;">インプレッション</th>
+            <th style="padding: 12px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600;">CTR</th>
+            <th style="padding: 12px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600;">ポジション</th>
+        </tr>
+    </thead>
+    <tbody>
+    """
+    
+    for data in table_data:
+        # HTMLエスケープ
+        page_url = data['ページ'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        
+        clicks_delta = format_delta(data['クリック']['diff'], data['クリック']['percent'], data['クリック']['prev'])
+        impressions_delta = format_delta(data['インプレッション']['diff'], data['インプレッション']['percent'], data['インプレッション']['prev'])
+        ctr_delta = format_delta_ctr(data['CTR']['diff'], data['CTR']['percent'], data['CTR']['prev'])
+        position_delta = format_delta_position(data['ポジション']['diff'], data['ポジション']['percent'], data['ポジション']['prev'])
+        
+        html_table += f"""
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding: 12px; font-weight: 600;">{data['順位']}</td>
+            <td style="padding: 12px; word-break: break-all; max-width: 400px;">{page_url}</td>
+            <td style="padding: 12px; text-align: right;">
+                <div>{data['クリック']['current']:,}</div>
+                {clicks_delta}
+            </td>
+            <td style="padding: 12px; text-align: right;">
+                <div>{data['インプレッション']['current']:,}</div>
+                {impressions_delta}
+            </td>
+            <td style="padding: 12px; text-align: right;">
+                <div>{data['CTR']['current']:.2f}%</div>
+                {ctr_delta}
+            </td>
+            <td style="padding: 12px; text-align: right;">
+                <div>{data['ポジション']['current']:.1f}</div>
+                {position_delta}
+            </td>
+        </tr>
+        """
+    
+    html_table += """
+    </tbody>
+    </table>
+    </div>
+    """
+    
+    # Streamlit Componentsを使用してHTMLを表示
+    import streamlit.components.v1 as components
+    components.html(html_table, height=1200, scrolling=True)
+    st.markdown("---")
+
 # KPIカードの表示（AIチャットが初期化されている場合のみ）
 if st.session_state.ai_chat is not None:
     with st.spinner("KPIデータを取得中..."):
@@ -1072,6 +1283,17 @@ if st.session_state.ai_chat is not None:
         )
         if current_queries is not None and not current_queries.empty:
             display_keyword_ranking(current_queries, prev_queries)
+    
+    # ページランキングの表示
+    with st.spinner("ページランキングデータを取得中..."):
+        current_pages, prev_pages = fetch_page_ranking_data(
+            date_range_days=st.session_state.date_range_days,
+            start_date=st.session_state.start_date,
+            end_date=st.session_state.end_date,
+            site_name=st.session_state.selected_site
+        )
+        if current_pages is not None and not current_pages.empty:
+            display_page_ranking(current_pages, prev_pages)
 
 # メインエリア
 # チャット履歴の表示
