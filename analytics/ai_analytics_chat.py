@@ -400,12 +400,13 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             # サイト全体のデータを取得する場合
             logger.info(f"GA4データ取得開始: 期間={date_range_days}日" + (f" ({start_date} ～ {end_date})" if start_date and end_date else ""))
             
-            # 拡張メトリクスを取得（収益、コンバージョンを含む）
+            # 拡張メトリクスを取得（収益、コンバージョン、eコマース購入数を含む）
             # GA4 APIでは 'users' ではなく 'activeUsers'、'pageviews' ではなく 'screenPageViews' を使用
             # 注意: 'purchases', 'itemPurchases', 'itemsPurchased'はGA4 Data APIでは無効なメトリクスです
+            # eコマース購入数は 'ecommercePurchases' メトリクスを使用
             extended_metrics = [
                 'sessions', 'activeUsers', 'screenPageViews', 'bounceRate', 'averageSessionDuration',
-                'conversions', 'totalRevenue', 'purchaseRevenue'
+                'conversions', 'ecommercePurchases', 'totalRevenue', 'purchaseRevenue'
             ]
             extended_dimensions = ['date', 'sessionDefaultChannelGroup']
             
@@ -472,21 +473,24 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             
             # コンバージョンデータの集計
             total_conversions = 0
-            # 注意: 'purchases'はGA4 Data APIでは無効なメトリクスです
-            # 購入数は'conversions'から推測するか、イベントベースで取得する必要があります
-            total_purchases = 0  # 購入イベント数は別途取得が必要
             try:
                 if 'conversions' in ga4_data.columns:
                     total_conversions = int(ga4_data['conversions'].sum())
-                    # conversionsを購入数として使用（購入コンバージョンが設定されている場合）
-                    total_purchases = total_conversions
             except (KeyError, ValueError, TypeError) as e:
                 logger.warning(f"コンバージョンデータの集計エラー: {e}")
             
-            # CVR（コンバージョン率）の計算
+            # eコマース購入数の集計
+            total_purchases = 0
+            try:
+                if 'ecommercePurchases' in ga4_data.columns:
+                    total_purchases = int(ga4_data['ecommercePurchases'].sum())
+            except (KeyError, ValueError, TypeError) as e:
+                logger.warning(f"eコマース購入数の集計エラー: {e}")
+            
+            # CVR（コンバージョン率）の計算（eコマース購入数ベース）
             cvr = 0.0
-            if total_sessions > 0 and total_conversions > 0:
-                cvr = (total_conversions / total_sessions) * 100
+            if total_sessions > 0 and total_purchases > 0:
+                cvr = (total_purchases / total_sessions) * 100
             
             # アイテム購入数の集計
             # 注意: 'itemPurchases'と'itemsPurchased'はGA4 Data APIでは無効なメトリクスです
@@ -503,24 +507,32 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             channel_data = {}
             if 'sessionDefaultChannelGroup' in ga4_data.columns:
                 try:
-                    channel_grouped = ga4_data.groupby('sessionDefaultChannelGroup').agg({
+                    # ecommercePurchasesが含まれているか確認
+                    agg_dict = {
                         'sessions': 'sum',
                         'conversions': 'sum',
                         'totalRevenue': 'sum'
-                    }).reset_index()
+                    }
+                    if 'ecommercePurchases' in ga4_data.columns:
+                        agg_dict['ecommercePurchases'] = 'sum'
+                    
+                    channel_grouped = ga4_data.groupby('sessionDefaultChannelGroup').agg(agg_dict).reset_index()
                     
                     for _, row in channel_grouped.iterrows():
                         channel_name = row['sessionDefaultChannelGroup']
                         channel_sessions = int(row['sessions']) if pd.notna(row['sessions']) else 0
                         channel_conversions = int(row['conversions']) if pd.notna(row['conversions']) else 0
                         channel_revenue = float(row['totalRevenue']) if pd.notna(row['totalRevenue']) else 0.0
-                        # 購入数はconversionsから推測（購入コンバージョンが設定されている場合）
-                        channel_purchases = channel_conversions
+                        # eコマース購入数を取得
+                        if 'ecommercePurchases' in row and pd.notna(row['ecommercePurchases']):
+                            channel_purchases = int(row['ecommercePurchases'])
+                        else:
+                            channel_purchases = 0
                         
-                        # チャネル別CVRの計算
+                        # チャネル別CVRの計算（eコマース購入数ベース）
                         channel_cvr = 0.0
-                        if channel_sessions > 0 and channel_conversions > 0:
-                            channel_cvr = (channel_conversions / channel_sessions) * 100
+                        if channel_sessions > 0 and channel_purchases > 0:
+                            channel_cvr = (channel_purchases / channel_sessions) * 100
                         
                         channel_data[channel_name] = {
                             'sessions': channel_sessions,
