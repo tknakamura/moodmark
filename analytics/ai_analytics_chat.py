@@ -64,6 +64,28 @@ class AIAnalyticsChat:
         self.system_prompt = """あなたはGoogle Analytics 4 (GA4)、Google Search Console (GSC)、およびSEO分析の専門家です。
 ユーザーの質問に対して、提供されたデータを基に、わかりやすく、実用的なアドバイスを提供してください。
 
+【分析の基本方針】
+- データドリブンな分析：数値を正確に引用し、根拠を示す
+- 実装可能な提案：具体的な手順、文字数、配置場所まで明記
+- 優先順位の明確化：影響度と実装難易度を考慮した優先順位付け
+- ベンチマークとの比較：業界標準や競合との比較を含める
+
+【SEOベストプラクティス基準】
+- タイトルタグ：30-60文字（推奨：32文字以内でクリック率が高い）、キーワードを前半に配置
+- メタディスクリプション：120-160文字、行動喚起（CTA）を含める
+- H1タグ：1ページに1つ、キーワードを含める、30-70文字
+- H2/H3タグ：階層構造を明確に、キーワードバリエーションを含める
+- 画像alt属性：具体的で説明的、キーワードを自然に含める
+- 内部リンク：関連性の高いページへ、アンカーテキストにキーワードを含める
+- 構造化データ：JSON-LD形式、適切なスキーマタイプ（Article, Product, BreadcrumbList等）
+- OGタグ：タイトル・説明・画像を設定、SNSでのシェア最適化
+
+【GSC指標の解釈】
+- CTR（クリック率）：1-2%が平均、3%以上が良好、0.5%以下は改善必要
+- 平均ポジション：1-3位が理想、4-10位は改善余地あり、11位以下は大幅改善必要
+- インプレッション：検索需要の指標、クリック数との比率でCTRを評価
+- クリック数：実際のトラフィック、インプレッションに対する比率が重要
+
 【質問の意図を理解し、適切に回答する】
 - 質問の種類（SEO改善、商品提案、データ分析、年次比較など）を自動的に判断してください
 - 質問の意図に応じて、適切な回答形式と含めるべき情報を柔軟に選択してください
@@ -78,6 +100,50 @@ class AIAnalyticsChat:
 - データがない場合は、その旨を明記してください
 - データ取得エラーがある場合は、エラーの内容を説明してください
 - データ取得状態が「✗ 取得失敗」と表示されている場合は、そのデータは利用できないことを理解してください
+
+【出力フォーマット】
+以下の3セクションで構成し、各セクションは具体的で実装可能な内容にしてください：
+
+1. 現状の要約（数値と傾向）
+   - 【重要】GSCデータがある場合、必ず最初に「GSCデータ分析」サブセクションを追加し、総クリック数、総インプレッション数、平均CTR、平均ポジションを明記してください
+   - 主要指標の数値を正確に記載
+   - 前期間との比較（増減率）
+   - 業界平均や競合との比較（可能な場合）
+   - 数値の意味することを簡潔に説明
+   - 【重要】スクレイピング結果がある場合、必ず「HTML分析（コンテンツSEO）」のサブセクションを追加してください：
+     * 現在のタイトルタグの内容と文字数、基準との比較
+     * 現在のメタディスクリプションの内容と文字数、基準との比較
+     * 見出し構造（H1/H2/H3）の評価：数、内容、キーワード含有状況
+     * 画像alt属性の設定状況（設定率、内容の質）
+     * 内部リンクの状況（数、関連性、アンカーテキスト）
+     * 構造化データの有無と種類
+     * OGタグの設定状況
+     * その他の技術的SEO要素（カノニカルURL等）
+
+2. 気づき・インサイト（増減の背景仮説など）
+   - 数値から読み取れる課題や機会
+   - なぜその数値になっているかの仮説（複数提示）
+   - スクレイピング結果がある場合、技術的な問題点の指摘
+   - 競合分析や市場トレンドとの関連性
+
+3. 改善提案（実装可能な具体的アクション）
+   - 各提案に「優先度（高/中/低）」「期待効果」「実装難易度」を明記
+   - 具体的な文字数、配置場所、修正内容を記載
+   - 【重要】スクレイピング結果がある場合、各提案に必ずBefore/After形式で現在の状態と改善案を明示してください：
+     * Before: 現在のHTML要素の状態（タイトル、メタディスクリプション、見出しなど）を具体的に記載
+     * After: 改善後のHTML要素の状態を具体的に記載（文字数も含める）
+     * 変更理由：なぜその変更が必要かの説明
+   - 実装手順をステップバイステップで説明
+   - 測定方法（改善後のKPI）を明記
+
+【重要】
+- 【必須】GSC/GA4データがある場合、必ず「現状の要約」セクションの最初に数値データ（クリック数、インプレッション数、CTR、ポジションなど）を含めてください
+- データが0件の場合でも、一般的なSEO改善提案を提示してください
+- スクレイピング結果がある場合、必ずそれを詳細に分析し、具体的な改善点を指摘してください
+- 【重要】タイトルやメタディスクリプションの文字数を正確にカウントしてください。文字数を記載する際は、実際の文字列を1文字ずつ数えて正確に行ってください。改行、スペース、全角/半角の違いも含めて正確にカウントしてください。特に「After」の文字数は、提案する文字列を実際に数えてから記載してください。
+- 見出し構造、画像alt属性、内部リンクなど、技術的なSEO要素を漏れなく評価してください
+- 提案は必ず実装可能なレベルまで具体化してください（「タイトルを改善する」ではなく「タイトルを『[キーワード]の選び方｜法人ギフト専門サイト』（32文字）に変更する」など）。文字数を記載する際は、必ず実際の文字列の文字数を正確に数えてから記載してください。
+- データが取得できなかった場合でも、その旨を明記し、一般的なSEO改善提案を提示してください
 
 【回答の構造】
 - 質問の種類に応じて、適切な構造で回答してください
@@ -693,7 +759,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
         else:
             return self.default_site_name
     
-    def _build_data_context(self, question: str, site_name: str = None, progress_callback=None, timeout: int = 300) -> str:
+    def _build_data_context(self, question: str, site_name: str = None, progress_callback=None, timeout: int = 300, keyword: str = None, landing_page: str = None) -> str:
         """
         質問に基づいてデータコンテキストを構築
         
@@ -702,6 +768,8 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             site_name (str): サイト名 ('moodmark' または 'moodmarkgift')、Noneの場合は自動判定またはデフォルトを使用
             progress_callback: 進捗コールバック関数（オプション）
             timeout (int): タイムアウト時間（秒）、デフォルトは300秒（5分）
+            keyword (str): 分析対象キーワード（オプション）
+            landing_page (str): 分析対象ランディングページ（オプション）
             
         Returns:
             str: データコンテキストの文字列
@@ -1289,6 +1357,173 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                 context_parts.append("上記の年次比較データを基に、昨年と比べて今年のオーガニック集客がどう変化したかを分析してください。")
                 context_parts.append("")
         
+        # キーワードまたはランディングページ指定時のデータ取得
+        if keyword or landing_page:
+            import time
+            step_start_time = time.time()
+            check_timeout()  # タイムアウトチェック
+            logger.info(f"キーワードまたはランディングページ指定時のデータ取得: keyword={keyword}, landing_page={landing_page}")
+            if progress_callback:
+                progress_callback("[STEP] 📊 キーワード/ランディングページデータを取得中...\n")
+            
+            # GSCデータを取得
+            if start_date and end_date:
+                gsc_data = self.google_apis.get_gsc_data_custom_range(
+                    start_date=start_date,
+                    end_date=end_date,
+                    site_name=site_name,
+                    dimensions=['query', 'page']
+                )
+            else:
+                gsc_data = self.google_apis.get_gsc_data(
+                    date_range_days=date_range,
+                    site_name=site_name,
+                    dimensions=['query', 'page']
+                )
+            
+            # キーワード指定時のフィルタリング
+            if keyword:
+                import pandas as pd
+                if isinstance(gsc_data, pd.DataFrame) and not gsc_data.empty:
+                    filtered_data = gsc_data[gsc_data['query'].str.contains(keyword, case=False, na=False)]
+                    logger.info(f"キーワード「{keyword}」でフィルタリング: {len(filtered_data)}件")
+                    
+                    if not filtered_data.empty:
+                        total_clicks = int(filtered_data['clicks'].sum())
+                        total_impressions = int(filtered_data['impressions'].sum())
+                        avg_ctr = float((total_clicks / total_impressions * 100)) if total_impressions > 0 else 0.0
+                        avg_position = float(filtered_data['position'].mean())
+                        
+                        context_parts.append(f"=== キーワード「{keyword}」のGSCデータ ===")
+                        if start_date and end_date:
+                            context_parts.append(f"期間: {start_date} ～ {end_date}")
+                        else:
+                            context_parts.append(f"期間: 過去{date_range}日間")
+                        context_parts.append(f"総クリック数: {total_clicks:,}")
+                        context_parts.append(f"総インプレッション数: {total_impressions:,}")
+                        context_parts.append(f"平均CTR: {avg_ctr:.2f}%")
+                        context_parts.append(f"平均ポジション: {avg_position:.2f}位")
+                        context_parts.append(f"データ件数: {len(filtered_data)}件")
+                        
+                        # トップ5ページのパフォーマンス
+                        top_pages = filtered_data.groupby('page').agg({
+                            'clicks': 'sum',
+                            'impressions': 'sum',
+                            'ctr': 'mean',
+                            'position': 'mean'
+                        }).reset_index()
+                        top_pages = top_pages.sort_values('clicks', ascending=False).head(5)
+                        
+                        if not top_pages.empty:
+                            context_parts.append("")
+                            context_parts.append("トップ5ページのパフォーマンス:")
+                            for i, (_, row) in enumerate(top_pages.iterrows(), 1):
+                                context_parts.append(f"  {i}. {row['page']}")
+                                context_parts.append(f"     - クリック: {int(row['clicks'])}, インプレ: {int(row['impressions']):,}, CTR: {row['ctr']*100:.2f}%, ポジション: {row['position']:.2f}位")
+                        context_parts.append("")
+                    else:
+                        context_parts.append(f"=== キーワード「{keyword}」のGSCデータ ===")
+                        context_parts.append(f"⚠️ キーワード「{keyword}」に関するGSCデータが見つかりませんでした。")
+                        context_parts.append("")
+            
+            # ランディングページ指定時のフィルタリングとスクレイピング
+            if landing_page:
+                import pandas as pd
+                import re
+                from urllib.parse import urlparse
+                
+                # URLの正規化
+                normalized_landing_page = re.sub(r'^https?://', '', landing_page).rstrip('/')
+                
+                if isinstance(gsc_data, pd.DataFrame) and not gsc_data.empty:
+                    # ページURLを正規化して比較
+                    gsc_data_normalized = gsc_data.copy()
+                    gsc_data_normalized['page_normalized'] = gsc_data_normalized['page'].str.replace(r'^https?://', '', regex=True).str.rstrip('/')
+                    filtered_data = gsc_data_normalized[gsc_data_normalized['page_normalized'] == normalized_landing_page]
+                    logger.info(f"ランディングページ「{landing_page}」でフィルタリング: {len(filtered_data)}件")
+                    
+                    if not filtered_data.empty:
+                        total_clicks = int(filtered_data['clicks'].sum())
+                        total_impressions = int(filtered_data['impressions'].sum())
+                        avg_ctr = float((total_clicks / total_impressions * 100)) if total_impressions > 0 else 0.0
+                        avg_position = float(filtered_data['position'].mean())
+                        
+                        context_parts.append(f"=== ランディングページ「{landing_page}」のGSCデータ ===")
+                        if start_date and end_date:
+                            context_parts.append(f"期間: {start_date} ～ {end_date}")
+                        else:
+                            context_parts.append(f"期間: 過去{date_range}日間")
+                        context_parts.append(f"総クリック数: {total_clicks:,}")
+                        context_parts.append(f"総インプレッション数: {total_impressions:,}")
+                        context_parts.append(f"平均CTR: {avg_ctr:.2f}%")
+                        context_parts.append(f"平均ポジション: {avg_position:.2f}位")
+                        context_parts.append(f"データ件数: {len(filtered_data)}件")
+                        
+                        # トップ5キーワードのパフォーマンス
+                        top_queries = filtered_data.groupby('query').agg({
+                            'clicks': 'sum',
+                            'impressions': 'sum',
+                            'ctr': 'mean',
+                            'position': 'mean'
+                        }).reset_index()
+                        top_queries = top_queries.sort_values('clicks', ascending=False).head(5)
+                        
+                        if not top_queries.empty:
+                            context_parts.append("")
+                            context_parts.append("トップ5キーワードのパフォーマンス:")
+                            for i, (_, row) in enumerate(top_queries.iterrows(), 1):
+                                context_parts.append(f"  {i}. {row['query']}")
+                                context_parts.append(f"     - クリック: {int(row['clicks'])}, インプレ: {int(row['impressions']):,}, CTR: {row['ctr']*100:.2f}%, ポジション: {row['position']:.2f}位")
+                        context_parts.append("")
+                    else:
+                        context_parts.append(f"=== ランディングページ「{landing_page}」のGSCデータ ===")
+                        context_parts.append(f"⚠️ ランディングページ「{landing_page}」に関するGSCデータが見つかりませんでした。")
+                        context_parts.append("")
+                
+                # スクレイピングを実行
+                try:
+                    # スクレイピング機能のインポートを試行
+                    try:
+                        from tools.ai.scraper import scrape_page
+                    except ImportError:
+                        # 代替パスを試行
+                        try:
+                            import sys
+                            import os
+                            scraper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'tools', 'ai', 'scraper.py')
+                            if os.path.exists(scraper_path):
+                                sys.path.append(os.path.dirname(scraper_path))
+                                from scraper import scrape_page
+                            else:
+                                raise ImportError("スクレイピング機能が見つかりません")
+                        except ImportError:
+                            logger.warning("スクレイピング機能が利用できません。HTML分析はスキップします。")
+                            context_parts.append(f"⚠️ ランディングページ「{landing_page}」のスクレイピング機能が利用できません。")
+                            context_parts.append("")
+                            raise ImportError("スクレイピング機能が利用できません")
+                    
+                    logger.info(f"ランディングページ「{landing_page}」のスクレイピングを実行中...")
+                    scraped_data = scrape_page(landing_page, detailed=True)
+                    
+                    if scraped_data:
+                        context_parts.append(f"=== ランディングページ「{landing_page}」のHTML分析（コンテンツSEO） ===")
+                        context_parts.append(f"タイトルタグ: \"{scraped_data.get('title', '未設定')}\" ({len(scraped_data.get('title', ''))}文字)")
+                        context_parts.append(f"メタディスクリプション: \"{scraped_data.get('meta_description', '未設定')}\" ({len(scraped_data.get('meta_description', ''))}文字)")
+                        context_parts.append(f"H1タグ: {len(scraped_data.get('h1', []))}個 {', '.join(scraped_data.get('h1', [])) if scraped_data.get('h1') else ''}")
+                        context_parts.append(f"H2タグ: {len(scraped_data.get('h2', []))}個")
+                        context_parts.append(f"H3タグ: {len(scraped_data.get('h3', []))}個")
+                        context_parts.append(f"画像: {len(scraped_data.get('images', []))}個（alt属性あり: {len([img for img in scraped_data.get('images', []) if img.get('alt')])}個）")
+                        context_parts.append(f"内部リンク: {len(scraped_data.get('internal_links', []))}個")
+                        context_parts.append(f"構造化データ: {len(scraped_data.get('structured_data', []))}個")
+                        context_parts.append("")
+                except Exception as scrape_err:
+                    logger.warning(f"スクレイピングエラー: {scrape_err}")
+                    context_parts.append(f"⚠️ ランディングページ「{landing_page}」のスクレイピングに失敗しました。")
+                    context_parts.append("")
+            
+            step_elapsed = time.time() - step_start_time
+            logger.info(f"キーワード/ランディングページデータ取得完了: {step_elapsed:.2f}秒")
+        
         # 特定ページのGSCデータ取得
         if needs_page_specific_analysis and urls:
             import time
@@ -1630,7 +1865,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
         
         return context_text
     
-    def ask(self, question: str, model: str = "gpt-4o-mini", site_name: str = None) -> str:
+    def ask(self, question: str, model: str = "gpt-4o-mini", site_name: str = None, keyword: str = None, landing_page: str = None) -> str:
         """
         質問に対してAIが回答を生成
         
@@ -1638,6 +1873,8 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             question (str): ユーザーの質問
             model (str): 使用するOpenAIモデル（デフォルト: gpt-4o-mini）
             site_name (str): サイト名 ('moodmark' または 'moodmarkgift')、Noneの場合は自動判定またはデフォルトを使用
+            keyword (str): 分析対象キーワード（オプション）
+            landing_page (str): 分析対象ランディングページ（オプション）
             
         Returns:
             str: AIの回答
@@ -1650,7 +1887,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             
             # データコンテキストを構築
             logger.info("データコンテキストを構築中...")
-            data_context = self._build_data_context(question, site_name=site_name)
+            data_context = self._build_data_context(question, site_name=site_name, keyword=keyword, landing_page=landing_page)
             
             if not data_context or not data_context.strip():
                 logger.warning("データコンテキストが空です")
@@ -1765,7 +2002,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             logger.error(f"エラー詳細:\n{error_details}")
             raise  # エラーを再発生させて、UI側で処理
     
-    def ask_stream(self, question: str, model: str = "gpt-4o-mini", site_name: str = None, conversation_history: List[Dict] = None) -> Generator[str, None, str]:
+    def ask_stream(self, question: str, model: str = "gpt-4o-mini", site_name: str = None, conversation_history: List[Dict] = None, keyword: str = None, landing_page: str = None) -> Generator[str, None, str]:
         """
         AIに質問してストリーミング応答を取得（ジェネレータ）
         
@@ -1774,6 +2011,8 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
             model (str): 使用するモデル名
             site_name (str): サイト名（'moodmark' または 'moodmarkgift'）
             conversation_history (List[Dict]): 会話履歴（オプション）
+            keyword (str): 分析対象キーワード（オプション）
+            landing_page (str): 分析対象ランディングページ（オプション）
         
         Yields:
             str: ストリーミング応答のチャンク
@@ -1832,7 +2071,7 @@ SEO改善に関する質問には、以下の3段階の構造で回答するこ�
                 yield "[STEP] 📈 GA4データを取得中...\n"
             
             # データコンテキストを構築（進捗コールバック付き）
-            data_context = self._build_data_context(question, site_name=site_name, progress_callback=progress_callback)
+            data_context = self._build_data_context(question, site_name=site_name, progress_callback=progress_callback, keyword=keyword, landing_page=landing_page)
             
             # キューに蓄積された進捗メッセージをyield
             for msg in progress_queue:

@@ -39,11 +39,57 @@ st.set_page_config(
 st.title("📊 GA4/GSC AI分析チャット")
 st.markdown("Google Analytics 4とGoogle Search ConsoleのデータをAIが分析し、質問にお答えします。")
 
+# 日付範囲選択ボタン
+col1, col2, col3, col4 = st.columns([1, 1, 1, 3])
+with col1:
+    if st.button("直近7日", use_container_width=True):
+        st.session_state.date_range_days = 7
+        st.session_state.start_date = None
+        st.session_state.end_date = None
+        st.rerun()
+with col2:
+    if st.button("直近30日", use_container_width=True):
+        st.session_state.date_range_days = 30
+        st.session_state.start_date = None
+        st.session_state.end_date = None
+        st.rerun()
+with col3:
+    if st.button("直近90日", use_container_width=True):
+        st.session_state.date_range_days = 90
+        st.session_state.start_date = None
+        st.session_state.end_date = None
+        st.rerun()
+
+# 日付範囲の表示
+from datetime import datetime, timedelta
+if st.session_state.start_date and st.session_state.end_date:
+    date_range_text = f"期間: {st.session_state.start_date} 〜 {st.session_state.end_date}"
+else:
+    end_date = datetime.now().strftime('%Y-%m-%d')
+    start_date = (datetime.now() - timedelta(days=st.session_state.date_range_days - 1)).strftime('%Y-%m-%d')
+    date_range_text = f"期間: {start_date} 〜 {end_date} (過去{st.session_state.date_range_days}日間)"
+st.caption(date_range_text)
+st.markdown("---")
+
 # セッション状態の初期化
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.ai_chat = None
     st.session_state.model = "gpt-4o-mini"
+    st.session_state.date_range_days = 30
+    st.session_state.start_date = None
+    st.session_state.end_date = None
+    st.session_state.keyword = ""
+    st.session_state.landing_page = ""
+
+# 日付範囲の初期化
+from datetime import datetime, timedelta
+if "date_range_days" not in st.session_state:
+    st.session_state.date_range_days = 30
+if "start_date" not in st.session_state:
+    st.session_state.start_date = None
+if "end_date" not in st.session_state:
+    st.session_state.end_date = None
 
 # サイドバー設定
 with st.sidebar:
@@ -273,8 +319,29 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # URL入力（SEO分析用）
-    st.subheader("🔗 ページ分析")
+    # キーワード入力フィールド
+    st.subheader("🔍 分析対象")
+    keyword_input = st.text_input(
+        "分析対象キーワード（オプション）",
+        value=st.session_state.get('keyword', ''),
+        placeholder="例: 結婚祝い お菓子",
+        key="keyword_input"
+    )
+    st.session_state.keyword = keyword_input
+    
+    # ランディングページ入力フィールド
+    landing_page_input = st.text_input(
+        "分析対象ランディングページ（オプション）",
+        value=st.session_state.get('landing_page', ''),
+        placeholder="例: https://isetan.mistore.jp/moodmark/...",
+        key="landing_page_input"
+    )
+    st.session_state.landing_page = landing_page_input
+    
+    st.markdown("---")
+    
+    # URL入力（SEO分析用、後方互換性のため残す）
+    st.subheader("🔗 ページ分析（旧形式）")
     url_input = st.text_input(
         "分析したいページのURLを入力（オプション）",
         placeholder="https://isetan.mistore.jp/moodmark/...",
@@ -282,6 +349,9 @@ with st.sidebar:
     )
     if url_input:
         st.info(f"📄 {url_input} を分析対象に含めます")
+        # ランディングページにも設定
+        if not st.session_state.landing_page:
+            st.session_state.landing_page = url_input
     
     st.markdown("---")
     
@@ -326,6 +396,212 @@ with st.sidebar:
             else:
                 st.session_state.user_input = example
             st.rerun()
+
+# KPIカード表示機能
+def get_previous_date_range(date_range_days, start_date=None, end_date=None):
+    """前期間の日付範囲を計算"""
+    from datetime import datetime, timedelta
+    if start_date and end_date:
+        start = datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.strptime(end_date, '%Y-%m-%d')
+        days_diff = (end - start).days + 1
+        prev_end = start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=days_diff - 1)
+        return prev_start.strftime('%Y-%m-%d'), prev_end.strftime('%Y-%m-%d')
+    else:
+        end = datetime.now()
+        start = end - timedelta(days=date_range_days - 1)
+        days_diff = date_range_days
+        prev_end = start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=days_diff - 1)
+        return prev_start.strftime('%Y-%m-%d'), prev_end.strftime('%Y-%m-%d')
+
+def fetch_kpi_data(date_range_days, start_date=None, end_date=None, site_name='moodmark'):
+    """KPIデータを取得"""
+    if st.session_state.ai_chat is None:
+        return None
+    
+    try:
+        # 現在期間のデータ取得
+        if start_date and end_date:
+            ga4_summary = st.session_state.ai_chat._get_ga4_summary(
+                date_range_days=(datetime.strptime(end_date, '%Y-%m-%d') - datetime.strptime(start_date, '%Y-%m-%d')).days + 1,
+                start_date=start_date,
+                end_date=end_date
+            )
+        else:
+            ga4_summary = st.session_state.ai_chat._get_ga4_summary(date_range_days=date_range_days)
+        
+        if start_date and end_date:
+            gsc_summary = st.session_state.ai_chat._get_gsc_summary(
+                date_range_days=(datetime.strptime(end_date, '%Y-%m-%d') - datetime.strptime(start_date, '%Y-%m-%d')).days + 1,
+                start_date=start_date,
+                end_date=end_date,
+                site_name=site_name
+            )
+        else:
+            gsc_summary = st.session_state.ai_chat._get_gsc_summary(
+                date_range_days=date_range_days,
+                site_name=site_name
+            )
+        
+        # 前期間のデータ取得
+        prev_start, prev_end = get_previous_date_range(date_range_days, start_date, end_date)
+        prev_days = (datetime.strptime(prev_end, '%Y-%m-%d') - datetime.strptime(prev_start, '%Y-%m-%d')).days + 1
+        
+        prev_ga4_summary = st.session_state.ai_chat._get_ga4_summary(
+            date_range_days=prev_days,
+            start_date=prev_start,
+            end_date=prev_end
+        )
+        
+        prev_gsc_summary = st.session_state.ai_chat._get_gsc_summary(
+            date_range_days=prev_days,
+            start_date=prev_start,
+            end_date=prev_end,
+            site_name=site_name
+        )
+        
+        # 自然検索セッションの取得
+        organic_sessions = 0
+        prev_organic_sessions = 0
+        if 'channel_data' in ga4_summary and ga4_summary.get('channel_data'):
+            organic_data = ga4_summary['channel_data'].get('Organic Search', {})
+            organic_sessions = organic_data.get('sessions', 0)
+        
+        if 'channel_data' in prev_ga4_summary and prev_ga4_summary.get('channel_data'):
+            prev_organic_data = prev_ga4_summary['channel_data'].get('Organic Search', {})
+            prev_organic_sessions = prev_organic_data.get('sessions', 0)
+        
+        return {
+            'current': {
+                'sessions': ga4_summary.get('total_sessions', 0),
+                'transactions': ga4_summary.get('total_purchases', 0),
+                'cvr': ga4_summary.get('cvr', 0.0),
+                'organic_sessions': organic_sessions,
+                'gsc_clicks': gsc_summary.get('total_clicks', 0),
+                'gsc_impressions': gsc_summary.get('total_impressions', 0),
+                'gsc_ctr': gsc_summary.get('avg_ctr', 0.0),
+                'gsc_position': gsc_summary.get('avg_position', 0.0),
+            },
+            'previous': {
+                'sessions': prev_ga4_summary.get('total_sessions', 0),
+                'transactions': prev_ga4_summary.get('total_purchases', 0),
+                'cvr': prev_ga4_summary.get('cvr', 0.0),
+                'organic_sessions': prev_organic_sessions,
+                'gsc_clicks': prev_gsc_summary.get('total_clicks', 0),
+                'gsc_impressions': prev_gsc_summary.get('total_impressions', 0),
+                'gsc_ctr': prev_gsc_summary.get('avg_ctr', 0.0),
+                'gsc_position': prev_gsc_summary.get('avg_position', 0.0),
+            }
+        }
+    except Exception as e:
+        st.error(f"KPIデータ取得エラー: {str(e)}")
+        return None
+
+def display_kpi_cards(kpi_data):
+    """KPIカードを表示"""
+    if kpi_data is None:
+        return
+    
+    def calculate_comparison(current, previous, is_lower_better=False):
+        """前期間対比を計算"""
+        if previous == 0:
+            return None, None
+        diff = current - previous
+        percent = (diff / previous) * 100 if previous != 0 else None
+        return diff, percent
+    
+    current = kpi_data['current']
+    previous = kpi_data['previous']
+    
+    # KPIカードを表示
+    st.subheader("📊 KPIダッシュボード")
+    
+    # 8つのKPIカードを2行4列で表示
+    kpi_cols = st.columns(4)
+    
+    # 1行目
+    with kpi_cols[0]:
+        sessions_diff, sessions_percent = calculate_comparison(current['sessions'], previous['sessions'])
+        st.metric(
+            label="セッション",
+            value=f"{current['sessions']:,}",
+            delta=f"{sessions_diff:+,} ({sessions_percent:+.2f}%)" if sessions_percent is not None else None
+        )
+    
+    with kpi_cols[1]:
+        transactions_diff, transactions_percent = calculate_comparison(current['transactions'], previous['transactions'])
+        st.metric(
+            label="トランザクション",
+            value=f"{current['transactions']:,}",
+            delta=f"{transactions_diff:+,} ({transactions_percent:+.2f}%)" if transactions_percent is not None else None
+        )
+    
+    with kpi_cols[2]:
+        cvr_diff, cvr_percent = calculate_comparison(current['cvr'], previous['cvr'])
+        st.metric(
+            label="CVR",
+            value=f"{current['cvr']:.2f}%",
+            delta=f"{cvr_diff:+.2f}%ポイント ({cvr_percent:+.2f}%)" if cvr_percent is not None else None
+        )
+    
+    with kpi_cols[3]:
+        organic_diff, organic_percent = calculate_comparison(current['organic_sessions'], previous['organic_sessions'])
+        st.metric(
+            label="自然検索セッション",
+            value=f"{current['organic_sessions']:,}",
+            delta=f"{organic_diff:+,} ({organic_percent:+.2f}%)" if organic_percent is not None else None
+        )
+    
+    # 2行目
+    kpi_cols2 = st.columns(4)
+    
+    with kpi_cols2[0]:
+        gsc_clicks_diff, gsc_clicks_percent = calculate_comparison(current['gsc_clicks'], previous['gsc_clicks'])
+        st.metric(
+            label="GSC クリック数",
+            value=f"{current['gsc_clicks']:,}",
+            delta=f"{gsc_clicks_diff:+,} ({gsc_clicks_percent:+.2f}%)" if gsc_clicks_percent is not None else None
+        )
+    
+    with kpi_cols2[1]:
+        gsc_impressions_diff, gsc_impressions_percent = calculate_comparison(current['gsc_impressions'], previous['gsc_impressions'])
+        st.metric(
+            label="GSC インプレッション数",
+            value=f"{current['gsc_impressions']:,}",
+            delta=f"{gsc_impressions_diff:+,} ({gsc_impressions_percent:+.2f}%)" if gsc_impressions_percent is not None else None
+        )
+    
+    with kpi_cols2[2]:
+        gsc_ctr_diff, gsc_ctr_percent = calculate_comparison(current['gsc_ctr'], previous['gsc_ctr'])
+        st.metric(
+            label="GSC CTR",
+            value=f"{current['gsc_ctr']:.2f}%",
+            delta=f"{gsc_ctr_diff:+.2f}%ポイント ({gsc_ctr_percent:+.2f}%)" if gsc_ctr_percent is not None else None
+        )
+    
+    with kpi_cols2[3]:
+        gsc_position_diff, gsc_position_percent = calculate_comparison(current['gsc_position'], previous['gsc_position'], is_lower_better=True)
+        st.metric(
+            label="GSC 平均ポジション",
+            value=f"{current['gsc_position']:.1f}",
+            delta=f"{gsc_position_diff:+.1f} ({gsc_position_percent:+.2f}%)" if gsc_position_percent is not None else None
+        )
+    
+    st.markdown("---")
+
+# KPIカードの表示（AIチャットが初期化されている場合のみ）
+if st.session_state.ai_chat is not None:
+    with st.spinner("KPIデータを取得中..."):
+        kpi_data = fetch_kpi_data(
+            date_range_days=st.session_state.date_range_days,
+            start_date=st.session_state.start_date,
+            end_date=st.session_state.end_date,
+            site_name=st.session_state.selected_site
+        )
+        if kpi_data:
+            display_kpi_cards(kpi_data)
 
 # メインエリア
 # チャット履歴の表示
@@ -406,7 +682,9 @@ if prompt := st.chat_input(chat_placeholder):
                             question,
                             model=st.session_state.model,
                             site_name=st.session_state.selected_site,
-                            conversation_history=conversation_history
+                            conversation_history=conversation_history,
+                            keyword=st.session_state.get('keyword', ''),
+                            landing_page=st.session_state.get('landing_page', '')
                         ):
                             # ステップメッセージかAI応答かを判定
                             if chunk.startswith("[STEP]"):
@@ -437,7 +715,9 @@ if prompt := st.chat_input(chat_placeholder):
                             question,
                             model=st.session_state.model,
                             site_name=st.session_state.selected_site,
-                            conversation_history=conversation_history
+                            conversation_history=conversation_history,
+                            keyword=st.session_state.get('keyword', ''),
+                            landing_page=st.session_state.get('landing_page', '')
                         ):
                             if chunk.startswith("[STEP]"):
                                 step_messages.append(chunk)
@@ -535,7 +815,9 @@ if prompt := st.chat_input(chat_placeholder):
                             question,
                             model=st.session_state.model,
                             site_name=st.session_state.selected_site,
-                            conversation_history=conversation_history
+                            conversation_history=conversation_history,
+                            keyword=st.session_state.get('keyword', ''),
+                            landing_page=st.session_state.get('landing_page', '')
                         ):
                             # ステップメッセージかAI応答かを判定
                             if chunk.startswith("[STEP]"):
@@ -566,7 +848,9 @@ if prompt := st.chat_input(chat_placeholder):
                             question,
                             model=st.session_state.model,
                             site_name=st.session_state.selected_site,
-                            conversation_history=conversation_history
+                            conversation_history=conversation_history,
+                            keyword=st.session_state.get('keyword', ''),
+                            landing_page=st.session_state.get('landing_page', '')
                         ):
                             if chunk.startswith("[STEP]"):
                                 step_messages.append(chunk)
