@@ -88,10 +88,13 @@ def login_page():
     st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
 
 class CSVToHTMLConverter:
-    def __init__(self, article_cgid='S010117', ranking_cgid='J011403'):
+    def __init__(self, article_cgid='S010117', ranking_cgid='J011403', 
+                 enable_ranking=True, enable_slider=True):
         self.html_template = self._load_html_template()
         self.article_cgid = article_cgid  # 記事の商品リンクに使用するcgid
         self.ranking_cgid = ranking_cgid  # ランキングスライダーに使用するcgid
+        self.enable_ranking = enable_ranking  # ランキングスライダーの有効/無効
+        self.enable_slider = enable_slider    # 段落内スライダーの有効/無効
     
     def _load_html_template(self):
         """HTMLテンプレートを読み込み（0歳・1歳クリスマス記事ベース）"""
@@ -422,13 +425,22 @@ class CSVToHTMLConverter:
                 elif tag == 'H3':
                     if current_section:
                         # ランキングH3かどうかを判定（様々な形式に対応）
+                        # H2のタイトルに「ランキング」が含まれ、かつH3が「数字+位」の形式の両方を満たす場合のみランキングとして判定
                         # 【1位】、【第1位】、1位、第1位、1位：などに対応
-                        # より確実に検出するため、数字+位のパターンを複数チェック
-                        is_ranking = bool(
+                        
+                        # 現在のセクション（H2）のタイトルを確認
+                        section_title = current_section.get('title', '')
+                        has_ranking_in_h2 = 'ランキング' in section_title
+                        
+                        # H3のタイトルが「数字+位」の形式かをチェック
+                        is_ranking_h3 = bool(
                             re.search(r'[【(]?[第]?[0-9０-９]+位[）】]?[:：]?', title_text) or
                             re.search(r'^[0-9０-９]+位', title_text) or
                             re.search(r'^[第]?[0-9０-９]+位[:：]', title_text)
                         )
+                        
+                        # 両方を満たす場合のみランキングとして判定
+                        is_ranking = has_ranking_in_h2 and is_ranking_h3
                         
                         current_h3 = {
                             'title': title_text,
@@ -573,7 +585,7 @@ class CSVToHTMLConverter:
                 # ランキングスライダーかどうかを判定
                 has_ranking = any(h3.get('is_ranking', False) for h3 in section['h3_items'])
                 
-                if has_ranking:
+                if has_ranking and self.enable_ranking:
                     # ランキングスライダーを生成
                     content += '''
     <!-- スライダーコンテナ ここから -->  
@@ -692,7 +704,7 @@ class CSVToHTMLConverter:
   </div>
   <!-- アイテム ここまで -->
 '''
-                                if slider_items:
+                                if slider_items and self.enable_slider:
                                     content += f'''
   <!-- スライダーコンテナ ここから -->
   <div class="slider-container">
@@ -738,7 +750,7 @@ class CSVToHTMLConverter:
   <!-- スライダーコンテナ ここまで -->
 '''
                             else:
-                                if slider_items:
+                                if slider_items and self.enable_slider:
                                     if h4_item['description']:
                                         content += f'''
   <p class="text">{h4_item['description']}</p>
@@ -949,6 +961,20 @@ def main():
         
         st.markdown("---")
         
+        st.header("📊 表示オプション")
+        enable_ranking = st.checkbox(
+            "ランキングスライダーを表示",
+            value=True,
+            help="冒頭のランキングスライダーを表示するかどうか"
+        )
+        enable_slider = st.checkbox(
+            "段落内スライダーを表示",
+            value=True,
+            help="H4セクション内のpタグスライダーを表示するかどうか"
+        )
+        
+        st.markdown("---")
+        
         st.header("📁 サンプルファイル")
         with open("csv/MOODMARK｜結婚祝い お菓子 - to中村さん結婚祝い お菓子｜改善案 コピー.csv", "r", encoding="utf-8") as f:
             csv_content = f.read()
@@ -972,7 +998,12 @@ def main():
             st.rerun()
     
     # メインエリア
-    converter = CSVToHTMLConverter(article_cgid=article_cgid, ranking_cgid=ranking_cgid)
+    converter = CSVToHTMLConverter(
+        article_cgid=article_cgid, 
+        ranking_cgid=ranking_cgid,
+        enable_ranking=enable_ranking,
+        enable_slider=enable_slider
+    )
     
     # ファイルアップロード
     uploaded_file = st.file_uploader(
