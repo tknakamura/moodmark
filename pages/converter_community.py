@@ -183,13 +183,48 @@ class CommunityCSVToHTMLConverter:
             current_h3 = None
             current_h4 = None
             
+            # テキストリンク統合用：すべての行をリストに変換
+            rows_list = []
             for index, row in df.iterrows():
+                rows_list.append({
+                    'index': index,
+                    'row': row
+                })
+            
+            # テキストリンクのdivタグを検出して、直前のpタグにマークを付ける
+            for i, item in enumerate(rows_list):
+                row = item['row']
+                tag = clean_value(row['タグ'])
+                div_type = clean_value(row.get('div種類', ''))
+                
+                # テキストリンクのdivタグの場合、直前のpタグにマークを付ける
+                if tag == 'div' and div_type == 'テキストリンク' and i > 0:
+                    prev_item = rows_list[i - 1]
+                    prev_row = prev_item['row']
+                    prev_tag = clean_value(prev_row['タグ'])
+                    
+                    if prev_tag == 'pタグ':
+                        # 直前の行がpタグの場合、マークを付ける
+                        prev_item['has_text_link_after'] = {
+                            'text': clean_value(row.get('title or description or heedline', '')),
+                            'url': clean_value(row.get('URL（商品・リンク）①', ''))
+                        }
+                        item['is_text_link_merged'] = True  # このdivは統合されたので処理をスキップ
+            
+            # 通常の処理を実行
+            for item in rows_list:
+                index = item['index']
+                row = item['row']
                 tag = clean_value(row['タグ'])
                 title_text = clean_value(row['title or description or heedline'])
                 description_text = clean_value(row['見出し下に＜p＞タグを入れる場合のテキスト'])
                 div_type = clean_value(row.get('div種類', ''))
                 display = clean_value(row.get('表示', ''))
                 link_state = clean_value(row.get('商品リンク状態', ''))
+                
+                # テキストリンクが統合済みの場合はスキップ
+                if item.get('is_text_link_merged', False):
+                    continue
 
                 if tag == 'title':
                     parsed_data['title'] = title_text
@@ -245,12 +280,23 @@ class CommunityCSVToHTMLConverter:
                         url4 = clean_value(row.get('URL（商品・リンク）④', '')) if 'URL（商品・リンク）④' in row else ''
                         span4 = clean_value(row.get('span（商品名）④', '')) if 'span（商品名）④' in row else ''
                         
+                        # E列（表示）とF列（商品リンク状態）の処理
+                        # displayが空の場合はTrue（表示）、'ON'の場合はTrue、'OFF'の場合はFalse
+                        display_value = True
+                        if display:
+                            display_value = display.upper().strip() == 'ON'
+                        
+                        # link_stateが空の場合はTrue（リンク有効）、'ON'の場合はTrue、'OFF'の場合はFalse
+                        link_enabled_value = True
+                        if link_state:
+                            link_enabled_value = link_state.upper().strip() == 'ON'
+                        
                         h4_item = {
                             'title': title_text,
                             'description': description_text,
                             'products': [],
-                            'display': display.upper() == 'ON' if display else True,  # デフォルトはON
-                            'link_enabled': link_state.upper() == 'ON' if link_state else True  # デフォルトはON
+                            'display': display_value,
+                            'link_enabled': link_enabled_value
                         }
                         
                         # 商品1
@@ -289,9 +335,14 @@ class CommunityCSVToHTMLConverter:
                         current_h4 = h4_item
                 
                 elif tag == 'div':
-                    # divタグの処理
+                    # divタグの処理（テキストリンクは既にpタグに統合済みのため、ここでは処理しない）
+                    if div_type == 'テキストリンク':
+                        # テキストリンクは既にpタグに統合されているのでスキップ
+                        continue
+                    
+                    # ボタンリンク、画像の場合
                     div_item = {
-                        'type': div_type,  # ボタンリンク、テキストリンク、画像
+                        'type': div_type,  # ボタンリンク、画像
                         'text': title_text,  # B列
                         'image_name': description_text,  # C列（画像名）
                         'url': clean_value(row.get('URL（商品・リンク）①', ''))  # URL列から取得
@@ -308,14 +359,22 @@ class CommunityCSVToHTMLConverter:
                         pass
                     elif current_section:
                         # 独立したpタグ
-                        current_section['p_tags'].append({
+                        p_tag_item = {
                             'text': title_text or description_text
-                        })
+                        }
+                        # テキストリンクが統合されている場合は追加
+                        if item.get('has_text_link_after'):
+                            p_tag_item['text_link'] = item['has_text_link_after']
+                        current_section['p_tags'].append(p_tag_item)
                     else:
                         # セクション外の独立したpタグ
-                        parsed_data['standalone_p_tags'].append({
+                        p_tag_item = {
                             'text': title_text or description_text
-                        })
+                        }
+                        # テキストリンクが統合されている場合は追加
+                        if item.get('has_text_link_after'):
+                            p_tag_item['text_link'] = item['has_text_link_after']
+                        parsed_data['standalone_p_tags'].append(p_tag_item)
             
             # 最後のセクションを追加
             if current_section:
@@ -447,8 +506,26 @@ class CommunityCSVToHTMLConverter:
                 
                 # 独立したpタグを処理（セクション内）
                 for p_tag in section.get('p_tags', []):
-                    content += f'''
-  <p class="text">{p_tag['text']}</p>
+                    p_text = p_tag.get('text', '')
+                    text_link = p_tag.get('text_link', None)
+                    
+                    if text_link:
+                        # テキストリンクが統合されている場合
+                        url = text_link.get('url', '#')
+                        link_text = text_link.get('text', '')
+                        # pタグ内にテキストリンクを埋め込む
+                        if url:
+                            content += f'''
+  <p class="text">{p_text}<a href="{url}" style="color:red;" target="_blank">{link_text}</a></p>
+'''
+                        else:
+                            content += f'''
+  <p class="text">{p_text}<a href="#" style="color:red;" target="_blank">{link_text}</a></p>
+'''
+                    else:
+                        # 通常のpタグ
+                        content += f'''
+  <p class="text">{p_text}</p>
 '''
                 
                 content += '''
@@ -463,8 +540,25 @@ class CommunityCSVToHTMLConverter:
             
             # セクション外の独立したpタグを処理
             for p_tag in parsed_data.get('standalone_p_tags', []):
-                content += f'''
-  <p class="text">{p_tag['text']}</p>
+                p_text = p_tag.get('text', '')
+                text_link = p_tag.get('text_link', None)
+                
+                if text_link:
+                    # テキストリンクが統合されている場合
+                    url = text_link.get('url', '#')
+                    link_text = text_link.get('text', '')
+                    if url:
+                        content += f'''
+  <p class="text">{p_text}<a href="{url}" style="color:red;" target="_blank">{link_text}</a></p>
+'''
+                    else:
+                        content += f'''
+  <p class="text">{p_text}<a href="#" style="color:red;" target="_blank">{link_text}</a></p>
+'''
+                else:
+                    # 通常のpタグ
+                    content += f'''
+  <p class="text">{p_text}</p>
 '''
             
             # 固定日付
