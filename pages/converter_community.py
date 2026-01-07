@@ -302,12 +302,14 @@ class CommunityCSVToHTMLConverter:
                         
                         # link_stateが空または'ON'の場合はTrue（リンク有効）、'OFF'の場合はFalse
                         link_enabled_value = True
-                        if link_state and link_state.strip():
-                            link_state_upper = link_state.upper().strip()
-                            if link_state_upper == 'OFF':
-                                link_enabled_value = False
-                            elif link_state_upper == 'ON':
-                                link_enabled_value = True
+                        if link_state:
+                            link_state_cleaned = str(link_state).strip()
+                            if link_state_cleaned:
+                                link_state_upper = link_state_cleaned.upper()
+                                if link_state_upper == 'OFF':
+                                    link_enabled_value = False
+                                elif link_state_upper == 'ON':
+                                    link_enabled_value = True
                         
                         h4_item = {
                             'title': title_text,
