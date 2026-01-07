@@ -281,15 +281,23 @@ class CommunityCSVToHTMLConverter:
                         span4 = clean_value(row.get('span（商品名）④', '')) if 'span（商品名）④' in row else ''
                         
                         # E列（表示）とF列（商品リンク状態）の処理
-                        # displayが空の場合はTrue（表示）、'ON'の場合はTrue、'OFF'の場合はFalse
+                        # displayが空または'ON'の場合はTrue（表示）、'OFF'の場合はFalse
                         display_value = True
-                        if display:
-                            display_value = display.upper().strip() == 'ON'
+                        if display and display.strip():
+                            display_upper = display.upper().strip()
+                            if display_upper == 'OFF':
+                                display_value = False
+                            elif display_upper == 'ON':
+                                display_value = True
                         
-                        # link_stateが空の場合はTrue（リンク有効）、'ON'の場合はTrue、'OFF'の場合はFalse
+                        # link_stateが空または'ON'の場合はTrue（リンク有効）、'OFF'の場合はFalse
                         link_enabled_value = True
-                        if link_state:
-                            link_enabled_value = link_state.upper().strip() == 'ON'
+                        if link_state and link_state.strip():
+                            link_state_upper = link_state.upper().strip()
+                            if link_state_upper == 'OFF':
+                                link_enabled_value = False
+                            elif link_state_upper == 'ON':
+                                link_enabled_value = True
                         
                         h4_item = {
                             'title': title_text,
