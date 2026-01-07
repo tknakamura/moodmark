@@ -266,6 +266,16 @@ class CommunityCSVToHTMLConverter:
                         current_h4 = None
                 
                 elif tag == 'H4':
+                    # H3が存在しないセクションでもH4（商品枠）を出せるようにする
+                    # 参照HTMLでは「H2 → div(ボタン) → item-box(H4)」の並びがあり、H3無しのケースがある
+                    if (current_h3 is None) and current_section:
+                        current_h3 = {
+                            'title': '',
+                            'description': '',
+                            'h4_items': []
+                        }
+                        current_section['h3_items'].append(current_h3)
+
                     if current_h3:
                         # 商品情報を取得（最大4リンクまで対応）
                         url1 = clean_value(row.get('URL（商品・リンク）①', ''))
@@ -424,13 +434,14 @@ class CommunityCSVToHTMLConverter:
                 
                 # H3アイテムを処理
                 for h3_item in section['h3_items']:
-                    # H3タイトルを追加
-                    content += f'''
+                    # H3が無いセクション向けに、内部的に作った“無名H3”は見出しを出さない
+                    if h3_item.get('title'):
+                        content += f'''
   <h3 class="section-subtitle">{h3_item['title']}</h3><br>
 '''
-                    # descriptionがnan以外の場合のみ追加
-                    if h3_item['description'] and h3_item['description'] != 'nan':
-                        content += f'''
+                        # descriptionがnan以外の場合のみ追加
+                        if h3_item.get('description') and h3_item['description'] != 'nan':
+                            content += f'''
   <p class="text">{h3_item['description']}</p>
 '''
                     
