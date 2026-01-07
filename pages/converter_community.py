@@ -491,11 +491,12 @@ class CommunityCSVToHTMLConverter:
       </a>
 '''
                                 else:
-                                    # F列がOFFの場合：リンクなし（spanタグで表示）
+                                    # F列がOFFの場合：リンク無効（参照HTMLに合わせて<a>タグでclass="item soldout"を使用）
                                     content += f'''
-      <span class="item">
+      <a href="$url('Product-Show','pid','{product_id}')$?cgid={self.article_cgid}" class="item soldout">
         <span class="text">{product['span']}</span>
-      </span>
+        <img src="assets/images/s_article/ico_circle_arrow.svg?$staticlink$" alt="詳しくはこちら" class="img">
+      </a>
 '''
                                 
                                 content += f'''
