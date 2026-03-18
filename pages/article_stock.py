@@ -10,7 +10,6 @@ import sys
 
 import pandas as pd
 import streamlit.components.v1 as components
-import plotly.graph_objects as go
 import streamlit as st
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -354,10 +353,10 @@ with tab_view:
                 " ユニークSKU数とは一致しません。"
             )
 
-            st.subheader("記事別: 掲載数 vs 在庫注意")
+            st.subheader("記事別サマリ")
             st.caption(
-                "各棒の「掲載数」は当該記事内の商品リンク数です。"
-                " 同一商品が複数記事にある場合、記事別の数値の合計はユニークSKU数と一致しません。"
+                "掲載リンク数は当該記事内の商品URL数です。"
+                " 記事間の合計はユニークSKU数と一致しません（同一商品の複数掲載など）。"
             )
             article_to_products = snap.get("article_to_products") or {}
             product_stock = snap.get("product_stock") or {}
@@ -377,71 +376,56 @@ with tab_view:
                 summary_rows.append(
                     {"記事": label, "掲載数": n, "在庫注意": bad, "article_url": aurl}
                 )
-            if summary_rows:
-                sdf = pd.DataFrame(summary_rows)
-                n_art = len(sdf)
-                # 記事が1件だけのとき、x=記事ラベル×2系列の group バーは幅0になり消えることがあるため別レイアウト
-                if n_art == 1:
-                    row = sdf.iloc[0]
-                    art_title = str(row["記事"])[:120]
-                    fig = go.Figure(
-                        data=[
-                            go.Bar(
-                                name="掲載数",
-                                x=["掲載数"],
-                                y=[int(row["掲載数"])],
-                                marker_color="rgb(100, 149, 237)",
-                                text=[int(row["掲載数"])],
-                                textposition="outside",
-                            ),
-                            go.Bar(
-                                name="在庫注意（入荷待ち・SOLD OUT・エラー等）",
-                                x=["在庫注意"],
-                                y=[int(row["在庫注意"])],
-                                marker_color="rgb(220, 80, 80)",
-                                text=[int(row["在庫注意"])],
-                                textposition="outside",
-                            ),
-                        ]
+            if not summary_rows:
+                st.info("記事別の集計データがありません。")
+            else:
+                table_rows = []
+                for r in summary_rows:
+                    n = int(r["掲載数"])
+                    bad = int(r["在庫注意"])
+                    ok = n - bad
+                    rate = f"{bad / n * 100:.1f}%" if n else "—"
+                    u = str(r.get("article_url") or "").strip()
+                    if u and not u.startswith(("http://", "https://")):
+                        u = "https://" + u.lstrip("/")
+                    table_rows.append(
+                        {
+                            "記事": r["記事"],
+                            "掲載リンク数": n,
+                            "在庫あり": ok,
+                            "在庫注意": bad,
+                            "在庫注意率": rate,
+                            "記事URL": u,
+                        }
                     )
-                    fig.update_layout(
-                        barmode="group",
-                        height=400,
-                        title=dict(text=f"記事: {art_title}", font=dict(size=14)),
-                        xaxis_title="",
-                        yaxis_title="件数",
-                        bargap=0.35,
-                        legend=dict(orientation="h", yanchor="bottom", y=1.08),
-                        yaxis=dict(rangemode="tozero"),
-                    )
-                    ymax = max(int(row["掲載数"]), int(row["在庫注意"]), 1)
-                    fig.update_yaxes(range=[0, ymax * 1.2 + 0.5])
-                else:
-                    fig = go.Figure()
-                    fig.add_bar(
-                        name="掲載数",
-                        x=sdf["記事"],
-                        y=sdf["掲載数"],
-                        marker_color="rgb(100, 149, 237)",
-                    )
-                    fig.add_bar(
-                        name="在庫注意（入荷待ち・SOLD OUT・エラー等）",
-                        x=sdf["記事"],
-                        y=sdf["在庫注意"],
-                        marker_color="rgb(220, 80, 80)",
-                    )
-                    fig.update_layout(
-                        barmode="group",
-                        height=max(400, min(900, 80 + n_art * 28)),
-                        xaxis_title="記事",
-                        yaxis_title="件数",
-                        bargap=0.25,
-                        bargroupgap=0.15,
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02),
-                        yaxis=dict(rangemode="tozero"),
-                        xaxis=dict(tickangle=-35),
-                    )
-                st.plotly_chart(fig, use_container_width=True)
+                article_table = pd.DataFrame(table_rows)
+                article_table = article_table.sort_values(
+                    ["在庫注意", "掲載リンク数"],
+                    ascending=[False, False],
+                    kind="mergesort",
+                )
+                st.dataframe(
+                    article_table,
+                    column_config={
+                        "記事URL": st.column_config.LinkColumn(
+                            "記事を開く",
+                            display_text="開く",
+                        ),
+                        "掲載リンク数": st.column_config.NumberColumn(
+                            "掲載リンク数", format="%d", help="記事HTML内の商品URL数"
+                        ),
+                        "在庫あり": st.column_config.NumberColumn(
+                            "在庫あり", format="%d", help="在庫OKと判定されたリンク数"
+                        ),
+                        "在庫注意": st.column_config.NumberColumn(
+                            "在庫注意",
+                            format="%d",
+                            help="入荷待ち・SOLD OUT・取得エラー等",
+                        ),
+                    },
+                    hide_index=True,
+                    use_container_width=True,
+                )
 
             st.subheader("商品一覧")
             show = st.radio(
