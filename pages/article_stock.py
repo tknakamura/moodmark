@@ -261,24 +261,33 @@ with tab_view:
             if summary_rows:
                 sdf = pd.DataFrame(summary_rows)
                 fig = go.Figure()
+                # 記事1件×2系列は group でバー幅0になり見えない → width/offsetgroup で明示
+                n_art = len(sdf)
+                one_cat = n_art == 1
+                w = 0.35
                 fig.add_bar(
                     name="掲載数",
                     x=sdf["記事"],
                     y=sdf["掲載数"],
                     marker_color="rgb(100, 149, 237)",
+                    **({"width": w, "offsetgroup": 0} if one_cat else {}),
                 )
                 fig.add_bar(
                     name="在庫注意（入荷待ち・SOLD OUT・エラー等）",
                     x=sdf["記事"],
                     y=sdf["在庫注意"],
                     marker_color="rgb(220, 80, 80)",
+                    **({"width": w, "offsetgroup": 1} if one_cat else {}),
                 )
                 fig.update_layout(
                     barmode="group",
                     height=400,
                     xaxis_title="記事",
                     yaxis_title="件数",
+                    bargap=0.25,
+                    bargroupgap=0.15,
                     legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                    yaxis=dict(rangemode="tozero"),
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
