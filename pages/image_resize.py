@@ -143,6 +143,22 @@ def main():
         return
 
     st.markdown("---")
+    st.subheader("加工後のプレビュー")
+    if len(results) == 1:
+        _name, _data = results[0]
+        st.image(io.BytesIO(_data), caption=_name, width=400)
+    else:
+        _cols = 3
+        for _i in range(0, len(results), _cols):
+            _row = results[_i : _i + _cols]
+            _columns = st.columns(_cols)
+            for _j, (_name, _data) in enumerate(_row):
+                with _columns[_j]:
+                    st.image(io.BytesIO(_data), caption=_name, width=200)
+
+    st.markdown("---")
+    st.subheader("ダウンロード")
+
     if len(files) == 1 and len(results) == 1:
         name, data = results[0]
         st.download_button(
