@@ -29,6 +29,17 @@ Streamlit ダッシュボードのページ **`/article_stock`**（[pages/articl
 
 `SQLAlchemy`、`psycopg2-binary`（[requirements.txt](../requirements.txt)）。
 
+### JSON から PostgreSQL へ初回移行
+
+ローカルに残っている `article_stock_state.json` を DB に載せる場合（**既存DBの記事・実行履歴は削除**されます）:
+
+```bash
+export DATABASE_URL='postgresql://...'   # ローカルからは External URL
+python scripts/migrate_article_stock_json_to_db.py /path/to/article_stock_state.json
+```
+
+ダッシュボードの「バックアップ / 復元」で JSON をアップロードしても同様に取り込めます。
+
 ## 定期実行（手動以外）
 
 ```bash
