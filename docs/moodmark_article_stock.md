@@ -4,7 +4,7 @@ Streamlit ダッシュボードのページ **`/article_stock`**（[pages/articl
 
 ## 在庫判定
 
-- 結果一覧の **商品名** は商品ページの `og:title` 等から取得（キャッシュ時も保持）。
+- 結果一覧の **商品名** は商品ページの `h1.name` 内の表示用 `<span>`（`brand` / `keyword` 以外）を優先し、なければ `og:title` 等（キャッシュ時も保持）。
 - `div.btn-cart.soldout` あり → 在庫なし。`span.main` で **入荷待ち** / **SOLD OUT** を区別。
 - 上記なし → **在庫あり** とみなす。
 

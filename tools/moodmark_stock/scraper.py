@@ -120,7 +120,7 @@ def _parse_iso(ts: str) -> Optional[datetime]:
 def parse_product_name_from_html(html: str) -> str:
     """
     商品ページHTMLから商品名を推定。
-    og:title（サイト名より左側を優先）→ twitter:title → h1 → title。
+    h1.name 直下の span（brand / keyword 以外）→ og:title → twitter:title → h1 全文 → title。
     """
     if not html:
         return ""
@@ -135,6 +135,17 @@ def parse_product_name_from_html(html: str) -> str:
         return t[:500] if t else ""
 
     soup = BeautifulSoup(html, "lxml")
+    # 画面表示の商品名（例: <h1 class="name"><span class="brand">…</span><span>商品名</span><span class="keyword">…</span>）
+    h1_name = soup.find("h1", class_="name")
+    if h1_name:
+        for span in h1_name.find_all("span", recursive=False):
+            classes = span.get("class") or []
+            if "brand" in classes or "keyword" in classes:
+                continue
+            t = span.get_text(" ", strip=True)
+            if t and len(t) >= 2:
+                return t[:500]
+
     og = soup.find("meta", attrs={"property": "og:title"})
     if og and og.get("content"):
         c = strip_site_suffix(str(og["content"]))
