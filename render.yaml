@@ -18,6 +18,9 @@ services:
         value: false
       - key: STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION
         value: false
+      # 記事在庫ダッシュボードの永続化（任意）: Persistent Disk をマウントしたパスを指定
+      # - key: MOODMARK_STOCK_STATE_PATH
+      #   value: /data/article_stock_state.json
       # 注意: 以下の環境変数はRender.comダッシュボードで設定してください
       # - key: OPENAI_API_KEY
       #   value: your_openai_api_key_here

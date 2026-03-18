@@ -674,7 +674,8 @@ def main():
         
         # 他のダッシュボードへのリンク
         st.markdown('[<div style="text-align: center;"><button style="background-color: #4CAF50; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📄 CSV to HTML コンバーター</button></div>](/)', unsafe_allow_html=True)
-        st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
+        st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
+        st.markdown('[<div style="text-align: center;"><button style="background-color: #009688; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📦 記事掲載商品・在庫</button></div>](article_stock)', unsafe_allow_html=True)
         
         st.markdown("---")
     
