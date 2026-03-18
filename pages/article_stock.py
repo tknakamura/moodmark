@@ -25,6 +25,7 @@ from tools.moodmark_stock.store import get_store
 
 RESULT_TABLE_HEADERS = {
     "product_url": "商品ページ",
+    "product_name": "商品名",
     "stock_status": "在庫コード",
     "stock_label": "在庫表示",
     "raw_main": "ボタン文言(main)",
@@ -289,6 +290,25 @@ with tab_view:
             st.warning("商品0件でした。")
         else:
             df = pd.DataFrame(rows)
+            if "product_name" not in df.columns:
+                df["product_name"] = ""
+            else:
+                df["product_name"] = df["product_name"].fillna("").astype(str)
+                df.loc[df["product_name"] == "nan", "product_name"] = ""
+            order_front = ["product_url", "product_name"]
+            order_mid = [
+                "stock_status",
+                "stock_label",
+                "raw_main",
+                "raw_sub",
+                "error",
+                "article_urls",
+                "article_labels",
+            ]
+            cols = [c for c in order_front if c in df.columns]
+            cols += [c for c in order_mid if c in df.columns]
+            cols += [c for c in df.columns if c not in cols]
+            df = df[cols]
             df["_oos"] = df["stock_status"].apply(lambda x: x != "in_stock")
 
             c1, c2, c3, c4 = st.columns(4)

@@ -117,6 +117,43 @@ def _parse_iso(ts: str) -> Optional[datetime]:
         return None
 
 
+def parse_product_name_from_html(html: str) -> str:
+    """
+    商品ページHTMLから商品名を推定。
+    og:title（サイト名より左側を優先）→ twitter:title → h1 → title。
+    """
+    if not html:
+        return ""
+
+    def strip_site_suffix(t: str) -> str:
+        t = (t or "").strip()
+        for sep in (" | ", " ｜ ", "|", "｜", " - ", " – "):
+            if sep in t:
+                left = t.split(sep, 1)[0].strip()
+                if len(left) >= 2:
+                    return left[:500]
+        return t[:500] if t else ""
+
+    soup = BeautifulSoup(html, "lxml")
+    og = soup.find("meta", attrs={"property": "og:title"})
+    if og and og.get("content"):
+        c = strip_site_suffix(str(og["content"]))
+        if c:
+            return c
+    tw = soup.find("meta", attrs={"name": "twitter:title"})
+    if tw and tw.get("content"):
+        c = strip_site_suffix(str(tw["content"]))
+        if c:
+            return c
+    h1 = soup.find("h1")
+    if h1:
+        return h1.get_text(" ", strip=True)[:500]
+    title = soup.find("title")
+    if title:
+        return strip_site_suffix(title.get_text(strip=True))
+    return ""
+
+
 def _is_within_ttl(checked_at: str, ttl_hours: float, now: datetime) -> bool:
     t = _parse_iso(checked_at)
     if not t:
@@ -209,8 +246,10 @@ def fetch_product_stock(
             "raw_main": "",
             "raw_sub": "",
             "error": err,
+            "product_name": "",
         }
     info = parse_stock_from_html(html or "")
+    info["product_name"] = parse_product_name_from_html(html or "")
     info["error"] = info.get("error")
     return info
 
@@ -227,8 +266,10 @@ def _fetch_one_product(purl: str, delay_s: float):
             "raw_main": "",
             "raw_sub": "",
             "error": err,
+            "product_name": "",
         }
     info = parse_stock_from_html(html or "")
+    info["product_name"] = parse_product_name_from_html(html or "")
     info["error"] = info.get("error")
     return purl, info
 
@@ -346,6 +387,7 @@ def run_stock_check(
                 for k, v in pent.items()
                 if k not in ("checked_at",)
             }
+            stock.setdefault("product_name", "")
             product_stock[purl] = stock
         else:
             need_product_fetch.append(purl)
@@ -392,6 +434,7 @@ def run_stock_check(
         rows.append(
             {
                 "product_url": purl,
+                "product_name": (st.get("product_name") or "").strip(),
                 "stock_status": st.get("status", "unknown"),
                 "stock_label": st.get("label", ""),
                 "raw_main": st.get("raw_main", ""),
@@ -436,6 +479,7 @@ def run_stock_check(
                     "raw_main": st.get("raw_main", ""),
                     "raw_sub": st.get("raw_sub", ""),
                     "error": st.get("error"),
+                    "product_name": (st.get("product_name") or "").strip(),
                 }
         else:
             prev = products_cached.get(purl, {})
@@ -446,6 +490,7 @@ def run_stock_check(
                 "raw_main": st.get("raw_main", ""),
                 "raw_sub": st.get("raw_sub", ""),
                 "error": st.get("error"),
+                "product_name": (st.get("product_name") or prev.get("product_name") or "").strip(),
             }
 
     return {
