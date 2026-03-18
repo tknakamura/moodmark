@@ -19,7 +19,7 @@ from PIL import Image, ImageOps
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
-from csv_to_html_dashboard import check_authentication, login_page
+from csv_to_html_dashboard import check_authentication, login_page, render_likepass_footer
 
 MAX_FILES = 30
 MAX_TOTAL_BYTES = 50 * 1024 * 1024
@@ -305,6 +305,7 @@ def main():
 
     if not uploaded:
         st.info("画像をアップロードしてください。")
+        render_likepass_footer()
         return
 
     files = list(uploaded)
@@ -312,14 +313,17 @@ def main():
 
     if len(files) > MAX_FILES:
         st.error(f"画像は最大 {MAX_FILES} 枚までです（現在 {len(files)} 枚）。")
+        render_likepass_footer()
         return
     if total_size > MAX_TOTAL_BYTES:
         st.error(
             f"合計サイズが上限を超えています（上限 {MAX_TOTAL_BYTES // (1024 * 1024)} MB、現在約 {total_size / (1024 * 1024):.1f} MB）。"
         )
+        render_likepass_footer()
         return
 
     if use_ai and not os.getenv("OPENAI_API_KEY"):
+        render_likepass_footer()
         return
 
     upload_sig = (tuple((f.name, f.size) for f in files), mode)
@@ -368,6 +372,7 @@ def main():
 
     results = st.session_state.get("_img_crop_results")
     if not results:
+        render_likepass_footer()
         return
 
     st.markdown("---")
@@ -417,6 +422,8 @@ def main():
             file_name=zip_name,
             mime="application/zip",
         )
+
+    render_likepass_footer()
 
 
 main()

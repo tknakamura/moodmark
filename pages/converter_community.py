@@ -20,7 +20,13 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 # 認証関連の関数（既存のcsv_to_html_dashboard.pyからインポート）
-from csv_to_html_dashboard import load_users, verify_password, check_authentication, login_page
+from csv_to_html_dashboard import (
+    load_users,
+    verify_password,
+    check_authentication,
+    login_page,
+    render_likepass_footer,
+)
 
 # ページ設定
 st.set_page_config(
@@ -854,6 +860,9 @@ def main():
         # デモ表示
         st.subheader("🎯 デモ: サンプルCSVでHTML生成")
         st.info("CSVファイルをアップロードしてHTMLを生成してください。")
+
+    render_likepass_footer()
+
 
 if __name__ == "__main__":
     main()

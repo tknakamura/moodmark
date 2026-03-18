@@ -16,7 +16,11 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from csv_to_html_dashboard import check_authentication, login_page
+from csv_to_html_dashboard import (
+    check_authentication,
+    login_page,
+    render_likepass_footer,
+)
 
 from tools.moodmark_stock.scraper import run_stock_check
 from tools.moodmark_stock.state import import_state_json
@@ -503,3 +507,5 @@ with tab_backup:
                     _invalidate_state_cache()
                     st.success("復元しました")
                     st.rerun()
+
+render_likepass_footer()

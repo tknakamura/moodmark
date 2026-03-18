@@ -29,6 +29,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 from analytics.ai_analytics_chat import AIAnalyticsChat
+from csv_to_html_dashboard import render_likepass_footer
 
 # ページ設定（最初のStreamlitコマンドである必要がある）
 st.set_page_config(
@@ -1649,6 +1650,7 @@ st.markdown(
         <p>📄 分析内容: タイトル、ディスクリプション、見出し構造、画像alt属性、構造化データ、リンク構造など</p>
     </div>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
+render_likepass_footer()
 
