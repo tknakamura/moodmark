@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-画像正方形クロップ（短辺基準・長辺を中央で均等に切り落とし）
+画像正方形クロップ（短辺基準・長辺方向の切り出し位置は中央 or AI 推定）
 """
 
+import base64
 import io
+import json
 import os
 import sys
+from typing import Optional, Tuple
 import zipfile
 from datetime import datetime
 
@@ -22,6 +25,7 @@ MAX_FILES = 30
 MAX_TOTAL_BYTES = 50 * 1024 * 1024
 UPLOAD_TYPES = ["jpg", "jpeg", "png", "webp", "gif"]
 OUTPUT_SIZE = (600, 600)
+VISION_MAX_LONG_EDGE = 1024
 
 
 def _to_rgb(img: Image.Image) -> Image.Image:
@@ -37,23 +41,159 @@ def _to_rgb(img: Image.Image) -> Image.Image:
     return img
 
 
-def crop_square(img: Image.Image) -> Image.Image:
+def crop_square_at(img: Image.Image, left: int, top: int, s: int) -> Image.Image:
     w, h = img.size
-    s = min(w, h)
-    left = (w - s) // 2
-    top = (h - s) // 2
+    left = max(0, min(left, w - s))
+    top = max(0, min(top, h - s))
     return img.crop((left, top, left + s, top + s))
 
 
-def image_bytes_to_square_jpeg(data: bytes, quality: int) -> bytes:
+def _extract_json_object(text: str) -> Optional[dict]:
+    if not text:
+        return None
+    start = text.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start : i + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
+def openai_suggest_square_offset(
+    img_rgb: Image.Image, api_key: str, model: str
+) -> Tuple[int, int]:
+    """
+    Vision API で正方形クロップの (left, top) を推定。
+    一辺 s = min(w,h)。縦長は top、横長は left を決める。
+    """
+    w, h = img_rgb.size
+    s = min(w, h)
+    if w == h:
+        return 0, 0
+
+    scale = VISION_MAX_LONG_EDGE / max(w, h)
+    wv = max(1, round(w * scale))
+    hv = max(1, round(h * scale))
+    vis = img_rgb.resize((wv, hv), Image.Resampling.LANCZOS)
+    vbuf = io.BytesIO()
+    vis.save(vbuf, format="JPEG", quality=85)
+    b64 = base64.standard_b64encode(vbuf.getvalue()).decode()
+
+    portrait = h > w
+    if portrait:
+        sv = wv
+        tmax = max(0, hv - sv)
+        prompt = (
+            f"This is a product photo. Preview size {wv}x{hv} pixels "
+            f"(same aspect ratio as the original {w}x{h} image).\n"
+            f"We crop a square using the FULL WIDTH ({wv}px), sliding vertically. "
+            f"The square height equals the width ({sv}px).\n"
+            f"Valid `top` (Y of top-left of square): integer from 0 to {tmax}. "
+            f"top=0 shows the top of the image; top={tmax} shows the bottom.\n"
+            f"If the product sits low in the frame (empty space on top), choose a LARGER top "
+            f"so the product is not cut off at the bottom.\n"
+            f"Return ONLY this JSON on one line, no markdown: {{\"top\": <integer>}}"
+        )
+    else:
+        sv = hv
+        lmax = max(0, wv - sv)
+        prompt = (
+            f"Product photo preview {wv}x{hv}px (original {w}x{h}px).\n"
+            f"Square crop uses full height ({hv}px), slides horizontally. "
+            f"Valid `left`: 0 to {lmax}.\n"
+            f"Place the main product inside the square.\n"
+            f"Return ONLY JSON: {{\"left\": <integer>}}"
+        )
+
+    try:
+        from openai import OpenAI
+    except ImportError as e:
+        raise RuntimeError("openai パッケージが必要です") from e
+
+    client = OpenAI(api_key=api_key)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{b64}",
+                            "detail": "low",
+                        },
+                    },
+                ],
+            }
+        ],
+        max_tokens=80,
+    )
+    text = (resp.choices[0].message.content or "").strip()
+    obj = _extract_json_object(text)
+    if not obj:
+        raise ValueError(f"JSON parse failed: {text[:200]}")
+
+    if portrait:
+        topv = int(obj.get("top", tmax // 2))
+        topv = max(0, min(tmax, topv))
+        top = int(round(topv * h / hv))
+        top = max(0, min(h - s, top))
+        left = (w - s) // 2
+    else:
+        leftv = int(obj.get("left", lmax // 2))
+        leftv = max(0, min(lmax, leftv))
+        left = int(round(leftv * w / wv))
+        left = max(0, min(w - s, left))
+        top = (h - s) // 2
+
+    return left, top
+
+
+def image_bytes_to_square_jpeg(
+    data: bytes,
+    quality: int,
+    *,
+    use_ai: bool = False,
+    api_key: str | None = None,
+    model: str = "gpt-4o-mini",
+) -> Tuple[bytes, Optional[str]]:
+    """
+    Returns (jpeg_bytes, warning_message or None).
+    """
     img = Image.open(io.BytesIO(data))
     img = ImageOps.exif_transpose(img)
     img = _to_rgb(img)
-    out = crop_square(img)
+    w, h = img.size
+    s = min(w, h)
+    warn = None
+
+    if use_ai and api_key:
+        try:
+            left, top = openai_suggest_square_offset(img, api_key, model)
+        except Exception as e:
+            left = (w - s) // 2
+            top = (h - s) // 2
+            warn = f"AI推定に失敗したため中央クロップにしました: {e}"
+    else:
+        left = (w - s) // 2
+        top = (h - s) // 2
+
+    out = crop_square_at(img, left, top, s)
     out = out.resize(OUTPUT_SIZE, Image.Resampling.LANCZOS)
     buf = io.BytesIO()
     out.save(buf, format="JPEG", quality=quality, optimize=True)
-    return buf.getvalue()
+    return buf.getvalue(), warn
 
 
 def safe_stem(name: str) -> str:
@@ -75,12 +215,33 @@ def main():
 
     st.title("🖼️ 画像正方形クロップ")
     st.markdown(
-        "短辺に合わせて長辺を中央から均等に切り落とし、正方形にしたうえで **600×600 ピクセル** の JPEG にします。"
+        "短辺に合わせて長辺を切り落とし正方形にし、**600×600 ピクセル** の JPEG にします。"
     )
     st.caption(
         f"**上限**: 最大 {MAX_FILES} 枚・合計 {MAX_TOTAL_BYTES // (1024 * 1024)} MB まで。"
         " 対応: JPEG / PNG / WebP / GIF（HEIC 等は非対応）。"
     )
+
+    mode = st.radio(
+        "クロップモード",
+        options=["通常モード（長辺を中央で均等に切り落とし）", "AIリサイズモード（商品が切れにくい位置を OpenAI が推定）"],
+        horizontal=False,
+        help="AIモードは画像が OpenAI に送信され、枚数分 API 課金されます。環境変数 OPENAI_API_KEY が必要です。",
+    )
+    use_ai = mode.startswith("AI")
+
+    if use_ai:
+        st.info(
+            "**AIリサイズ**: 各画像が Vision API（OpenAI）に送信されます。"
+            " 商品が下寄りの構図でも切りにくいよう、長辺方向の位置を推定します。"
+        )
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            st.error(
+                "OPENAI_API_KEY が設定されていません。Render の Environment にキーを設定してください。"
+            )
+        model = os.getenv("OPENAI_CROP_MODEL", "gpt-4o-mini")
+        st.caption(f"使用モデル: `{model}`（`OPENAI_CROP_MODEL` で変更可）")
 
     uploaded = st.file_uploader(
         "画像を選択（複数可）",
@@ -105,21 +266,36 @@ def main():
         )
         return
 
-    upload_sig = tuple((f.name, f.size) for f in files)
+    if use_ai and not os.getenv("OPENAI_API_KEY"):
+        return
+
+    upload_sig = (tuple((f.name, f.size) for f in files), mode)
     if st.session_state.get("_img_crop_sig") != upload_sig:
         st.session_state.pop("_img_crop_results", None)
         st.session_state["_img_crop_sig"] = upload_sig
 
     quality = st.slider("JPEG 品質", min_value=85, max_value=95, value=90, step=1)
 
+    api_key = os.getenv("OPENAI_API_KEY") or ""
+    model = os.getenv("OPENAI_CROP_MODEL", "gpt-4o-mini")
+
     if st.button("正方形にクロップして生成", type="primary"):
         results = []
         errors = []
         stem_count = {}
-        for f in files:
+        progress = st.progress(0.0) if use_ai and len(files) > 1 else None
+        for idx, f in enumerate(files):
             try:
                 raw = f.getvalue()
-                jpeg = image_bytes_to_square_jpeg(raw, quality)
+                jpeg, warn = image_bytes_to_square_jpeg(
+                    raw,
+                    quality,
+                    use_ai=use_ai,
+                    api_key=api_key if use_ai else None,
+                    model=model,
+                )
+                if warn:
+                    st.warning(f"{f.name}: {warn}")
                 stem = safe_stem(f.name)
                 n = stem_count.get(stem, 0)
                 stem_count[stem] = n + 1
@@ -129,6 +305,10 @@ def main():
                 results.append((out_name, jpeg))
             except Exception as e:
                 errors.append(f"{f.name}: {e}")
+            if progress is not None:
+                progress.progress((idx + 1) / len(files))
+        if progress is not None:
+            progress.empty()
         if errors:
             for msg in errors:
                 st.error(msg)
