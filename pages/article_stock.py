@@ -160,8 +160,21 @@ else:
 
 state = _get_state()
 
-tab_manage, tab_run, tab_view, tab_backup = st.tabs(
-    ["記事URLの管理", "在庫チェック実行", "結果の表示", "バックアップ / 復元"]
+# タブを横幅均等・切り替えやすく
+st.markdown(
+    """
+<style>
+.stTabs [data-baseweb="tab-list"] { width: 100%; display: flex; }
+.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"] {
+  flex: 1; justify-content: center; min-width: 0;
+  padding: 12px 16px; min-height: 48px;
+}
+</style>""",
+    unsafe_allow_html=True,
+)
+# 結果の表示をデフォルトにするため先頭に配置
+tab_view, tab_manage, tab_run, tab_backup = st.tabs(
+    ["結果の表示", "記事URLの管理", "在庫チェック実行", "バックアップ / 復元"]
 )
 
 with tab_manage:
