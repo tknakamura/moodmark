@@ -31,7 +31,6 @@ RESULT_TABLE_HEADERS = {
     "product_name": "商品名",
     "article_count": "掲載記事数",
     "stock_label": "在庫表示",
-    "error": "エラー",
     "article_urls": "掲載記事URL",
     "article_labels": "掲載記事ラベル",
 }
@@ -42,7 +41,6 @@ RESULT_TABLE_COLUMN_ORDER = [
     "product_name",
     "article_count",
     "stock_label",
-    "error",
     "article_urls",
     "article_labels",
 ]
