@@ -85,6 +85,13 @@ def _result_df_to_clickable_html(df: pd.DataFrame) -> str:
                     else:
                         links.append(html_escape.escape(p))
                 cell = "<br>".join(links) if links else html_escape.escape(s)
+            elif c == "article_labels" and s:
+                parts = [p.strip() for p in s.split(";") if p.strip()]
+                cell = (
+                    "<br>".join(html_escape.escape(p) for p in parts)
+                    if parts
+                    else html_escape.escape(s)
+                )
             else:
                 cell = html_escape.escape(s)
             tds.append(f"<td>{cell}</td>")
@@ -447,6 +454,7 @@ with tab_view:
             show = st.radio(
                 "表示",
                 ("すべて", "在庫注意のみ", "在庫ありのみ"),
+                index=1,
                 horizontal=True,
             )
             multi_article_only = st.checkbox(
