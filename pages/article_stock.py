@@ -26,6 +26,7 @@ from tools.moodmark_stock.store import get_store
 RESULT_TABLE_HEADERS = {
     "product_url": "商品ページ",
     "product_name": "商品名",
+    "article_count": "掲載記事数",
     "stock_label": "在庫表示",
     "error": "エラー",
     "article_urls": "掲載記事URL",
@@ -36,11 +37,22 @@ RESULT_TABLE_HEADERS = {
 RESULT_TABLE_COLUMN_ORDER = [
     "product_url",
     "product_name",
+    "article_count",
     "stock_label",
     "error",
     "article_urls",
     "article_labels",
 ]
+
+
+def _count_articles_from_urls(article_urls) -> int:
+    """article_urls の ; 区切り非空要素数 = 掲載記事数。"""
+    if article_urls is None or (isinstance(article_urls, float) and pd.isna(article_urls)):
+        return 0
+    s = str(article_urls).strip()
+    if not s:
+        return 0
+    return len([p for p in s.split(";") if p.strip()])
 
 
 def _result_df_to_clickable_html(df: pd.DataFrame) -> str:
@@ -58,6 +70,8 @@ def _result_df_to_clickable_html(df: pd.DataFrame) -> str:
             if c == "product_url" and s.startswith("http"):
                 esc = html_escape.escape(s)
                 cell = f'<a href="{esc}" target="_blank" rel="noopener noreferrer">{esc}</a>'
+            elif c == "article_count":
+                cell = html_escape.escape(s) if s else "0"
             elif c == "article_urls" and s:
                 parts = [p.strip() for p in s.split(";") if p.strip()]
                 links = []
@@ -317,14 +331,34 @@ with tab_view:
             cols += [c for c in df.columns if c not in cols]
             df = df[cols]
             df["_oos"] = df["stock_status"].apply(lambda x: x != "in_stock")
+            df["article_count"] = df["article_urls"].apply(_count_articles_from_urls)
 
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("掲載商品数（ユニーク）", len(df))
-            c2.metric("在庫あり", int((df["stock_status"] == "in_stock").sum()))
-            c3.metric("入荷待ち", int((df["stock_status"] == "restock_wait").sum()))
-            c4.metric("SOLD OUT等", int(df["_oos"].sum()))
+            atp = snap.get("article_to_products") or {}
+            total_slots = sum(len(plist) for plist in atp.values())
+            slots_unknown = total_slots == 0 and len(df) > 0
+
+            k1, k2, k3, k4, k5 = st.columns(5)
+            k1.metric("ユニークSKU数", len(df))
+            k2.metric(
+                "記事上の掲載枠（合計）",
+                "—" if slots_unknown else str(total_slots),
+                help=None
+                if not slots_unknown
+                else "article_to_products が無い古いスナップショットの可能性があります。在庫チェックを再実行してください。",
+            )
+            k3.metric("在庫あり", int((df["stock_status"] == "in_stock").sum()))
+            k4.metric("入荷待ち", int((df["stock_status"] == "restock_wait").sum()))
+            k5.metric("SOLD OUT等", int(df["_oos"].sum()))
+            st.caption(
+                "掲載枠の合計は、記事をまたいだ同一商品の重複や、同一記事内の複数リンクを含みます。"
+                " ユニークSKU数とは一致しません。"
+            )
 
             st.subheader("記事別: 掲載数 vs 在庫注意")
+            st.caption(
+                "各棒の「掲載数」は当該記事内の商品リンク数です。"
+                " 同一商品が複数記事にある場合、記事別の数値の合計はユニークSKU数と一致しません。"
+            )
             article_to_products = snap.get("article_to_products") or {}
             product_stock = snap.get("product_stock") or {}
             summary_rows = []
@@ -415,18 +449,28 @@ with tab_view:
                 ("すべて", "在庫注意のみ", "在庫ありのみ"),
                 horizontal=True,
             )
+            multi_article_only = st.checkbox(
+                "2記事以上に掲載されている商品のみ",
+                value=False,
+                help="掲載記事数が2以上のSKUに絞り込みます。",
+            )
             art_filter = st.selectbox(
                 "記事で絞り込み",
                 ["（すべて）"]
                 + [a.get("label") or a.get("url") for a in state.get("articles", [])],
             )
-            view = df.drop(columns=["_oos"], errors="ignore")
+            view = df.copy()
             if show == "在庫注意のみ":
-                view = df[df["_oos"]].drop(columns=["_oos"], errors="ignore")
+                view = view[view["_oos"]]
             elif show == "在庫ありのみ":
-                view = df[df["stock_status"] == "in_stock"].drop(
-                    columns=["_oos"], errors="ignore"
+                view = view[view["stock_status"] == "in_stock"]
+            if multi_article_only:
+                view = view[view["article_count"] >= 2]
+            if show == "在庫注意のみ":
+                view = view.sort_values(
+                    "article_count", ascending=False, kind="mergesort"
                 )
+            view = view.drop(columns=["_oos"], errors="ignore")
             if art_filter != "（すべて）":
                 art = next(
                     (
