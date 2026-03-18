@@ -26,6 +26,8 @@ MAX_TOTAL_BYTES = 50 * 1024 * 1024
 UPLOAD_TYPES = ["jpg", "jpeg", "png", "webp", "gif"]
 OUTPUT_SIZE = (600, 600)
 VISION_MAX_LONG_EDGE = 1024
+# 縦長時、API の top が上寄りすぎて下端が欠けるのを防ぐ下限（tmax に対する比率）。0.85〜0.92 で調整可。
+PORTRAIT_TOP_MIN_RATIO = float(os.getenv("AI_CROP_PORTRAIT_TOP_MIN_RATIO", "0.88"))
 
 
 def _to_rgb(img: Image.Image) -> Image.Image:
@@ -93,15 +95,16 @@ def openai_suggest_square_offset(
         sv = wv
         tmax = max(0, hv - sv)
         prompt = (
-            f"This is a product photo. Preview size {wv}x{hv}px "
-            f"(same aspect as original {w}x{h}).\n"
-            f"Square crop: FULL WIDTH ({wv}px), height = width ({sv}px). "
-            f"`top` in 0..{tmax} (larger top = show lower part of image).\n"
-            f"Goals: (1) Entire main product visible, not cut off at bottom. "
-            f"(2) Do NOT frame flush against product edges—leave a little of the "
-            f"natural photo background visible between product and square edges where possible. "
-            f"(3) If product sits low, prefer a slightly SMALLER top than maximum so the "
-            f"product is not jammed against the bottom edge; accept some empty area above if needed.\n"
+            f"Product photo. Preview {wv}x{hv}px (original {w}x{h}).\n"
+            f"Square crop: full width {wv}px, height {sv}px. Integer `top` from 0 to {tmax}. "
+            f"Larger `top` = window moves DOWN (shows lower part of image).\n"
+            f"PRIORITY 1: The bottom edge of the main product (box/packaging) must be FULLY inside "
+            f"the square—never clipped. A SMALL `top` cuts off the bottom of low-sitting products.\n"
+            f"PRIORITY 2: For products near the bottom of the photo, `top` should be LARGE, "
+            f"typically close to {tmax}.\n"
+            f"PRIORITY 3: If there is visible background BELOW the product in the photo, you may "
+            f"use `top` slightly less than {tmax} to show a thin strip of that background under the product. "
+            f"If unsure or the product touches the photo bottom, use `top` near {tmax}.\n"
             f"Return ONLY JSON: {{\"top\": <integer>}}"
         )
     else:
@@ -146,8 +149,12 @@ def openai_suggest_square_offset(
         raise ValueError(f"JSON parse failed: {text[:200]}")
 
     if portrait:
-        topv = int(obj.get("top", tmax // 2))
+        default_top = tmax if tmax <= 0 else max(0, min(tmax, int(round(tmax * 0.95))))
+        topv = int(obj.get("top", default_top))
         topv = max(0, min(tmax, topv))
+        if tmax > 0:
+            top_floor = int(tmax * PORTRAIT_TOP_MIN_RATIO)
+            topv = max(topv, min(tmax, top_floor))
         top = int(round(topv * h / hv))
         top = max(0, min(h - s, top))
         left = (w - s) // 2
