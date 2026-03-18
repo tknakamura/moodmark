@@ -9,25 +9,36 @@ Streamlit ダッシュボードのページ **`/article_stock`**（[pages/articl
 
 ロジックは [tools/moodmark_stock/scraper.py](../tools/moodmark_stock/scraper.py) に集約。
 
-## データの保存場所
+## データの保存（PostgreSQL 推奨）
 
-- 既定: リポジトリ直下の `data/article_stock_state.json`（`.gitignore` 対象のためコミットされません）。
-- 環境変数 **`MOODMARK_STOCK_STATE_PATH`** でファイルパスを上書き可能（Render の Persistent Disk 等）。
+永続層は [tools/moodmark_stock/store.py](../tools/moodmark_stock/store.py) が担当します。
 
-Render の無料 Web は再デプロイでローカルファイルが消えるため、**JSON のダウンロード／アップロード**でバックアップするか、永続ディスクをマウントしてください。
+| 条件 | 動作 |
+|------|------|
+| 環境変数 **`DATABASE_URL` が設定されている** | **PostgreSQL**。記事はテーブル `moodmark_stock_articles`、各実行結果は `moodmark_stock_runs`（JSONB）に追記。画面は**最新1件の実行**を表示。 |
+| 未設定 | **JSON ファイル**（既定 `data/article_stock_state.json` または `MOODMARK_STOCK_STATE_PATH`）。 |
+
+### Render
+
+[render.yaml](../render.yaml) では Web サービス用 PostgreSQL（`moodmark-article-stock`）と `DATABASE_URL` の自動連携を定義しています。Blueprint を初めて適用する場合、ダッシュボードでサービスとDBの作成・紐づけを確認してください。
+
+- **無料 PostgreSQL** は一定期間で期限切れになるプランがあります。本番は有料プランやバックアップ（`pg_dump`、またはダッシュボードの **JSON ダウンロード**）を推奨します。
+- JSON のみ運用したい場合は、Render 上で **`DATABASE_URL` 環境変数を削除**すればローカルJSON相当の挙動になります（無料Webではファイルは再デプロイで消えやすいので非推奨）。
+
+### 依存パッケージ
+
+`SQLAlchemy`、`psycopg2-binary`（[requirements.txt](../requirements.txt)）。
 
 ## 定期実行（手動以外）
 
-Streamlit プロセス内のタイマーはスリープで止まりがちなので、別ジョブでの実行を推奨します。
-
 ```bash
-# 記事一覧が state JSON に入っている前提
-export MOODMARK_STOCK_STATE_PATH=/path/to/article_stock_state.json
+export DATABASE_URL='postgresql://...'   # または JSON モードなら MOODMARK_STOCK_STATE_PATH
+export MOODMARK_STOCK_DELAY=0.75
 python scripts/run_article_stock_check.py
 ```
 
-- **GitHub Actions**: `schedule` で上記を実行し、生成 JSON を Artifact に保存するか、プライベートリポジトリへコミット。その後ダッシュボードの「バックアップ / 復元」で取り込み。
-- **Render Cron**（利用可能な場合）: 同コマンドをスケジュール実行。
+- **GitHub Actions** / **Render Cron**: 上記を `schedule` 実行。`DATABASE_URL` を渡せば結果が DB に蓄積されます。
+- Streamlit 内のタイマーだけに頼らない運用を推奨します。
 
 ## 記事で商品が0件になる場合
 

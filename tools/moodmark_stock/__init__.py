@@ -13,6 +13,7 @@ from tools.moodmark_stock.state import (
     save_state,
     STATE_VERSION,
 )
+from tools.moodmark_stock.store import get_store
 
 __all__ = [
     "extract_product_urls_from_html",
@@ -21,6 +22,7 @@ __all__ = [
     "run_stock_check",
     "DEFAULT_STATE_PATH",
     "get_state_path",
+    "get_store",
     "load_state",
     "save_state",
     "STATE_VERSION",

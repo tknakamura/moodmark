@@ -6,6 +6,11 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run csv_to_html_dashboard.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false
     envVars:
+      # 記事在庫ダッシュボード: 下記 PostgreSQL へ接続（未リンク時はダッシュボードで手動設定可）
+      - key: DATABASE_URL
+        fromDatabase:
+          name: moodmark-article-stock
+          property: connectionString
       - key: PYTHON_VERSION
         value: 3.9.18
       - key: STREAMLIT_SERVER_PORT
@@ -18,7 +23,7 @@ services:
         value: false
       - key: STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION
         value: false
-      # 記事在庫ダッシュボードの永続化（任意）: Persistent Disk をマウントしたパスを指定
+      # JSON のみ使う場合: ダッシュボードで DATABASE_URL を削除するか、以下のディスクパス
       # - key: MOODMARK_STOCK_STATE_PATH
       #   value: /data/article_stock_state.json
       # 注意: 以下の環境変数はRender.comダッシュボードで設定してください
@@ -31,4 +36,8 @@ services:
       # - key: GSC_SITE_URL
       #   value: https://isetan.mistore.jp/moodmark/
 
-
+databases:
+  - name: moodmark-article-stock
+    databaseName: moodmark_article_stock
+    user: moodmark_stock
+    plan: free

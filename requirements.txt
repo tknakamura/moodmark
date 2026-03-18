@@ -24,6 +24,15 @@ openai>=1.0.0
 python-dotenv>=1.0.0
 python-dateutil>=2.8.2
 
+# Merchant Center CSV入稿システム（SFCC → Google Merchant Center）
+Flask>=3.0.0
+chardet>=5.0.0
+werkzeug>=3.0.0
+
+# Article stock dashboard (PostgreSQL on Render)
+SQLAlchemy>=2.0.0,<3
+psycopg2-binary>=2.9.9,<3
+
 # Web Scraping & SEO Analysis
 requests>=2.28.0
 beautifulsoup4>=4.11.0

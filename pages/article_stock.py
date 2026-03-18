@@ -6,7 +6,6 @@
 
 import os
 import sys
-from copy import deepcopy
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -19,17 +18,8 @@ if project_root not in sys.path:
 from csv_to_html_dashboard import check_authentication, login_page
 
 from tools.moodmark_stock.scraper import run_stock_check
-from tools.moodmark_stock.state import (
-    add_article,
-    attach_snapshot,
-    export_state_json,
-    get_state_path,
-    import_state_json,
-    load_state,
-    remove_article,
-    save_state,
-    update_article,
-)
+from tools.moodmark_stock.state import import_state_json
+from tools.moodmark_stock.store import get_store
 
 st.set_page_config(
     page_title="記事掲載商品・在庫",
@@ -66,24 +56,28 @@ with st.sidebar:
     st.markdown("---")
 
 
+def _invalidate_state_cache():
+    st.session_state.pop("ams_state", None)
+
+
 def _get_state():
     if "ams_state" not in st.session_state:
-        st.session_state.ams_state = load_state()
+        st.session_state.ams_state = get_store().load_state()
     return st.session_state.ams_state
-
-
-def _persist(state):
-    save_state(state)
-    st.session_state.ams_state = load_state()
 
 
 st.title("📦 記事掲載商品の在庫")
 st.caption("登録した特集記事から商品URLを抽出し、在庫状態をまとめて表示します。")
 
-state_path = get_state_path()
-if not os.environ.get("MOODMARK_STOCK_STATE_PATH"):
+store = get_store()
+if os.environ.get("DATABASE_URL", "").strip():
+    st.success(
+        "データ保存先: **PostgreSQL**（`DATABASE_URL`）。記事一覧と実行履歴（最新結果）がDBに保存されます。"
+    )
+else:
     st.info(
-        f"データ保存先: `{state_path}` （Render 等では再デプロイで消えます。**JSONのダウンロード／アップロード**でバックアップしてください。永続化は `MOODMARK_STOCK_STATE_PATH` でディスクパスを指定）"
+        f"データ保存先: **JSON** `{store.backend_label.split(':', 1)[-1]}` 。"
+        "PostgreSQL を使う場合は環境変数 **`DATABASE_URL`** を設定してください（Render でDBとWebを紐づけ）。"
     )
 
 state = _get_state()
@@ -105,17 +99,16 @@ with tab_manage:
         new_label = st.text_input("表示ラベル（任意）", placeholder="誕生日特集", key="ams_new_label")
 
     if st.button("追加", type="primary", key="ams_add"):
-        s = deepcopy(_get_state())
-        s, err = add_article(s, new_url, new_label)
+        err = store.add_article(new_url, new_label)
         if err:
             st.error(err)
         else:
-            _persist(s)
+            _invalidate_state_cache()
             st.success("追加しました")
             st.rerun()
 
     st.subheader("登録一覧")
-    arts = state.get("articles") or []
+    arts = _get_state().get("articles") or []
     if not arts:
         st.warning("記事が未登録です。上でURLを追加してください。")
     else:
@@ -133,31 +126,30 @@ with tab_manage:
         c1, c2 = st.columns(2)
         with c1:
             if st.button("更新", key="ams_upd"):
-                s = deepcopy(_get_state())
-                s, err = update_article(s, aid, url=eu, label=el)
+                err = store.update_article(aid, url=eu, label=el)
                 if err:
                     st.error(err)
                 else:
-                    _persist(s)
+                    _invalidate_state_cache()
                     st.success("更新しました")
                     st.rerun()
         with c2:
             if st.button("削除", key="ams_rm"):
-                s = deepcopy(_get_state())
-                _persist(remove_article(s, aid))
+                store.remove_article(aid)
+                _invalidate_state_cache()
                 st.success("削除しました")
                 st.rerun()
 
 with tab_run:
     st.subheader("今すぐ在庫チェック")
     delay = st.slider("リクエスト間隔（秒）", 0.3, 2.0, 0.75, 0.05)
-    arts = state.get("articles") or []
+    arts = _get_state().get("articles") or []
     if not arts:
         st.warning("先に「記事URLの管理」で記事を登録してください。")
     else:
         st.write(f"対象記事: **{len(arts)}** 件")
         if st.button("実行", type="primary", key="ams_run"):
-            arts_now = _get_state().get("articles") or []
+            arts_now = get_store().load_state().get("articles") or []
             prog = st.progress(0.0)
             status = st.empty()
 
@@ -173,9 +165,8 @@ with tab_run:
             except Exception as e:
                 st.error(f"実行エラー: {e}")
             else:
-                st_now = _get_state()
-                attach_snapshot(st_now, snap)
-                _persist(st_now)
+                get_store().record_snapshot(snap)
+                _invalidate_state_cache()
                 prog.progress(1.0)
                 status.text("完了")
                 w = snap.get("article_warnings") or []
@@ -189,6 +180,7 @@ with tab_run:
                 st.balloons()
 
 with tab_view:
+    state = _get_state()
     snap = state.get("last_snapshot")
     if not snap:
         st.info("まだ実行されていません。「在庫チェック実行」タブから実行してください。")
@@ -208,7 +200,6 @@ with tab_view:
             c3.metric("入荷待ち", int((df["stock_status"] == "restock_wait").sum()))
             c4.metric("SOLD OUT等", int(df["_oos"].sum()))
 
-            # 記事別集計
             st.subheader("記事別: 掲載数 vs 在庫注意")
             article_to_products = snap.get("article_to_products") or {}
             product_stock = snap.get("product_stock") or {}
@@ -298,7 +289,7 @@ with tab_backup:
     st.subheader("JSON ダウンロード")
     st.download_button(
         "現在の設定・最終結果をダウンロード",
-        data=export_state_json(_get_state()),
+        data=get_store().export_state_json(),
         file_name="article_stock_state.json",
         mime="application/json",
     )
@@ -311,7 +302,10 @@ with tab_backup:
             st.error(err)
         else:
             if st.button("この内容で上書き保存", type="primary"):
-                save_state(data)
-                st.session_state.ams_state = load_state()
-                st.success("復元しました")
-                st.rerun()
+                imp_err = get_store().import_full_state(data)
+                if imp_err:
+                    st.error(imp_err)
+                else:
+                    _invalidate_state_cache()
+                    st.success("復元しました")
+                    st.rerun()
