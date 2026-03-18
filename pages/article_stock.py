@@ -4,10 +4,12 @@
 記事掲載商品の在庫可視化（MOO:D MARK）
 """
 
+import html as html_escape
 import os
 import sys
 
 import pandas as pd
+import streamlit.components.v1 as components
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -20,6 +22,59 @@ from csv_to_html_dashboard import check_authentication, login_page
 from tools.moodmark_stock.scraper import run_stock_check
 from tools.moodmark_stock.state import import_state_json
 from tools.moodmark_stock.store import get_store
+
+RESULT_TABLE_HEADERS = {
+    "product_url": "商品ページ",
+    "stock_status": "在庫コード",
+    "stock_label": "在庫表示",
+    "raw_main": "ボタン文言(main)",
+    "raw_sub": "サブ文言",
+    "error": "エラー",
+    "article_urls": "掲載記事URL",
+    "article_labels": "掲載記事ラベル",
+}
+
+
+def _result_df_to_clickable_html(df: pd.DataFrame) -> str:
+    """商品URL・記事URLをクリックで開けるHTMLテーブル。"""
+    cols = [c for c in df.columns if c != "_oos"]
+    th = "".join(
+        f"<th>{html_escape.escape(RESULT_TABLE_HEADERS.get(c, c))}</th>" for c in cols
+    )
+    rows = []
+    for _, row in df.iterrows():
+        tds = []
+        for c in cols:
+            v = row[c]
+            s = "" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v)
+            if c == "product_url" and s.startswith("http"):
+                esc = html_escape.escape(s)
+                cell = f'<a href="{esc}" target="_blank" rel="noopener noreferrer">{esc}</a>'
+            elif c == "article_urls" and s:
+                parts = [p.strip() for p in s.split(";") if p.strip()]
+                links = []
+                for p in parts:
+                    if p.startswith("http"):
+                        e = html_escape.escape(p)
+                        links.append(
+                            f'<a href="{e}" target="_blank" rel="noopener noreferrer">{e}</a>'
+                        )
+                    else:
+                        links.append(html_escape.escape(p))
+                cell = "<br>".join(links) if links else html_escape.escape(s)
+            else:
+                cell = html_escape.escape(s)
+            tds.append(f"<td>{cell}</td>")
+        rows.append("<tr>" + "".join(tds) + "</tr>")
+    return (
+        "<style>.article-stock-result-table a{color:#1976d2;text-decoration:underline;}"
+        ".article-stock-result-table td{vertical-align:top;word-break:break-all;}"
+        ".article-stock-result-table th,.article-stock-result-table td{padding:8px;border:1px solid #ddd;}"
+        ".article-stock-result-table th{background:#f5f5f5;}</style>"
+        '<table class="article-stock-result-table" style="border-collapse:collapse;width:100%;font-size:14px;">'
+        f"<thead><tr>{th}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+    )
+
 
 st.set_page_config(
     page_title="記事掲載商品・在庫",
@@ -164,10 +219,13 @@ with tab_run:
         "各ワーカーのリクエスト前待機（秒）",
         0.0,
         1.5,
-        0.0,
+        0.5,
         0.05,
-        help="0 推奨。サイト負荷を下げたいときのみ上げる。",
+        help="サイト負荷配慮のため **0.3〜0.5秒を推奨**。0にすると並列時の負荷が上がります。",
         key="ams_delay",
+    )
+    st.caption(
+        "**推奨**: 待機 **0.3〜0.5秒**（既定 0.5秒）。短すぎると相手サーバへの負荷・ブロックのリスクが上がります。"
     )
     arts = _get_state().get("articles") or []
     if not arts:
@@ -321,17 +379,16 @@ with tab_view:
                 if art:
                     u = art.get("url", "")
                     view = view[view["article_urls"].str.contains(u, na=False)]
-            try:
-                st.dataframe(
-                    view,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "product_url": st.column_config.LinkColumn("商品ページ"),
-                    },
+            if view.empty:
+                st.info("条件に一致する行がありません。")
+            else:
+                table_html = _result_df_to_clickable_html(view)
+                h = min(720, 140 + len(view) * 36)
+                components.html(
+                    f'<div style="overflow:auto;max-height:680px;">{table_html}</div>',
+                    height=h,
+                    scrolling=True,
                 )
-            except Exception:
-                st.dataframe(view, use_container_width=True, hide_index=True)
 
 with tab_backup:
     st.subheader("JSON ダウンロード")

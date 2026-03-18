@@ -42,6 +42,7 @@ python scripts/migrate_article_stock_json_to_db.py /path/to/article_stock_state.
 
 ## 速度・キャッシュ
 
+- **リクエスト前待機**: ワーカーごとに GET の直前にスリープする秒数。**0.3〜0.5秒を推奨**（ダッシュボード既定 0.5 秒）。短すぎると相手サイトへの負荷・ブロックのリスクが上がります。
 - **並列取得**: 記事ページ・商品ページをそれぞれ同時接続数上限付きで並列 GET（ダッシュボードのスライダー、または CLI の環境変数）。
 - **TTL キャッシュ**（既定 24 時間）: 前回スナップショットの `cache_meta` を使い、期間内の記事は掲載商品URLの再取得を省略、商品は在庫結果の再取得を省略。**強制フルチェック**で無効化可能。
 - 記事取得失敗・商品取得エラー時は、その URL のキャッシュを更新せず次回再試行します。
@@ -50,7 +51,7 @@ python scripts/migrate_article_stock_json_to_db.py /path/to/article_stock_state.
 
 ```bash
 export DATABASE_URL='postgresql://...'
-export MOODMARK_STOCK_DELAY=0
+export MOODMARK_STOCK_DELAY=0.5   # 推奨 0.3〜0.5
 export MOODMARK_STOCK_ARTICLE_WORKERS=4
 export MOODMARK_STOCK_PRODUCT_WORKERS=12
 export MOODMARK_STOCK_CACHE_HOURS=24

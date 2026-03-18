@@ -5,7 +5,7 @@
 
   DATABASE_URL              … 設定時は PostgreSQL に読み書き
   MOODMARK_STOCK_STATE_PATH … JSON モード時のファイルパス（任意）
-  MOODMARK_STOCK_DELAY      … 各ワーカーのリクエスト前待機（秒）デフォルト 0
+  MOODMARK_STOCK_DELAY      … 各ワーカーのリクエスト前待機（秒）デフォルト 0.5（推奨 0.3〜0.5）
   MOODMARK_STOCK_ARTICLE_WORKERS … 記事並列数 デフォルト 4
   MOODMARK_STOCK_PRODUCT_WORKERS … 商品並列数 デフォルト 12
   MOODMARK_STOCK_CACHE_HOURS … キャッシュTTL（時間）デフォルト 24
@@ -31,7 +31,7 @@ def main() -> int:
     if not arts:
         print("No articles registered.", file=sys.stderr)
         return 1
-    delay = float(os.environ.get("MOODMARK_STOCK_DELAY", "0"))
+    delay = float(os.environ.get("MOODMARK_STOCK_DELAY", "0.5"))
     wa = int(os.environ.get("MOODMARK_STOCK_ARTICLE_WORKERS", "4"))
     wp = int(os.environ.get("MOODMARK_STOCK_PRODUCT_WORKERS", "12"))
     ttl = float(os.environ.get("MOODMARK_STOCK_CACHE_HOURS", "24"))
