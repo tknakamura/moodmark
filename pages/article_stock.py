@@ -29,7 +29,7 @@ from tools.moodmark_stock.store import get_store
 RESULT_TABLE_HEADERS = {
     "product_url": "商品ページ",
     "product_name": "商品名",
-    "article_count": "掲載記事数",
+    "article_count": "記事",
     "stock_label": "在庫表示",
     "article_urls": "掲載記事URL",
     "article_labels": "掲載記事ラベル",
@@ -96,12 +96,22 @@ def _result_df_to_clickable_html(df: pd.DataFrame) -> str:
                 cell = html_escape.escape(s)
             tds.append(f"<td>{cell}</td>")
         rows.append("<tr>" + "".join(tds) + "</tr>")
+    # 在庫表示: 適切な幅 / 掲載記事ラベル: 2倍幅
+    colgroup = ""
+    for i, c in enumerate(cols):
+        if c == "stock_label":
+            colgroup += '<col style="width:9em">'
+        elif c == "article_labels":
+            colgroup += '<col style="min-width:18em;width:28%">'
+        else:
+            colgroup += "<col>"
     return (
         "<style>.article-stock-result-table a{color:#1976d2;text-decoration:underline;}"
         ".article-stock-result-table td{vertical-align:top;word-break:break-all;}"
         ".article-stock-result-table th,.article-stock-result-table td{padding:8px;border:1px solid #ddd;}"
         ".article-stock-result-table th{background:#f5f5f5;}</style>"
-        '<table class="article-stock-result-table" style="border-collapse:collapse;width:100%;font-size:14px;">'
+        '<table class="article-stock-result-table" style="border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed;">'
+        f"<colgroup>{colgroup}</colgroup>"
         f"<thead><tr>{th}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
     )
 
@@ -368,8 +378,8 @@ with tab_view:
                 else "article_to_products が無い古いスナップショットの可能性があります。在庫チェックを再実行してください。",
             )
             k3.metric("在庫あり", int((df["stock_status"] == "in_stock").sum()))
-            k4.metric("入荷待ち", int((df["stock_status"] == "restock_wait").sum()))
-            k5.metric("SOLD OUT等", int(df["_oos"].sum()))
+            k4.metric("在庫注意", int(df["_oos"].sum()))
+            k5.metric("入荷待ち", int((df["stock_status"] == "restock_wait").sum()))
             st.caption(
                 "掲載枠の合計は、記事をまたいだ同一商品の重複や、同一記事内の複数リンクを含みます。"
                 " ユニークSKU数とは一致しません。"
