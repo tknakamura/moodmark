@@ -142,7 +142,33 @@ with tab_manage:
 
 with tab_run:
     st.subheader("今すぐ在庫チェック")
-    delay = st.slider("リクエスト間隔（秒）", 0.3, 2.0, 0.75, 0.05)
+    st.caption(
+        "記事・商品は並列取得。前回実行から指定時間以内のデータは再GETしません（強制フルで無効化）。"
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        ttl_h = st.selectbox(
+            "スキップするキャッシュの有効期間",
+            [12, 24, 48],
+            index=1,
+            format_func=lambda x: f"{x} 時間以内なら記事・在庫をスキップ",
+            key="ams_ttl",
+        )
+        force_full = st.checkbox(
+            "強制フルチェック（キャッシュを使わず全件GET）", key="ams_force"
+        )
+    with c2:
+        w_art = st.slider("記事ページ取得の同時接続数", 1, 16, 4, key="ams_wa")
+        w_prd = st.slider("商品ページ取得の同時接続数", 1, 32, 12, key="ams_wp")
+    delay = st.slider(
+        "各ワーカーのリクエスト前待機（秒）",
+        0.0,
+        1.5,
+        0.0,
+        0.05,
+        help="0 推奨。サイト負荷を下げたいときのみ上げる。",
+        key="ams_delay",
+    )
     arts = _get_state().get("articles") or []
     if not arts:
         st.warning("先に「記事URLの管理」で記事を登録してください。")
@@ -150,6 +176,7 @@ with tab_run:
         st.write(f"対象記事: **{len(arts)}** 件")
         if st.button("実行", type="primary", key="ams_run"):
             arts_now = get_store().load_state().get("articles") or []
+            prev_snap = get_store().load_state().get("last_snapshot")
             prog = st.progress(0.0)
             status = st.empty()
 
@@ -160,7 +187,14 @@ with tab_run:
 
             try:
                 snap = run_stock_check(
-                    arts_now, request_delay_s=delay, progress_callback=cb
+                    arts_now,
+                    request_delay_s=delay,
+                    max_article_workers=int(w_art),
+                    max_product_workers=int(w_prd),
+                    previous_snapshot=prev_snap,
+                    cache_ttl_hours=float(ttl_h),
+                    force_full_refresh=force_full,
+                    progress_callback=cb,
                 )
             except Exception as e:
                 st.error(f"実行エラー: {e}")
@@ -169,6 +203,11 @@ with tab_run:
                 _invalidate_state_cache()
                 prog.progress(1.0)
                 status.text("完了")
+                rs = snap.get("run_stats") or {}
+                st.info(
+                    f"記事: 新規取得 {rs.get('articles_fetched', 0)} / キャッシュ利用 {rs.get('articles_cached', 0)} ・ "
+                    f"商品: 新規取得 {rs.get('products_fetched', 0)} / キャッシュ利用 {rs.get('products_cached', 0)}"
+                )
                 w = snap.get("article_warnings") or []
                 if w:
                     st.warning("警告（記事ごと）:")

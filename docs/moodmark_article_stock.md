@@ -40,11 +40,21 @@ python scripts/migrate_article_stock_json_to_db.py /path/to/article_stock_state.
 
 ダッシュボードの「バックアップ / 復元」で JSON をアップロードしても同様に取り込めます。
 
+## 速度・キャッシュ
+
+- **並列取得**: 記事ページ・商品ページをそれぞれ同時接続数上限付きで並列 GET（ダッシュボードのスライダー、または CLI の環境変数）。
+- **TTL キャッシュ**（既定 24 時間）: 前回スナップショットの `cache_meta` を使い、期間内の記事は掲載商品URLの再取得を省略、商品は在庫結果の再取得を省略。**強制フルチェック**で無効化可能。
+- 記事取得失敗・商品取得エラー時は、その URL のキャッシュを更新せず次回再試行します。
+
 ## 定期実行（手動以外）
 
 ```bash
-export DATABASE_URL='postgresql://...'   # または JSON モードなら MOODMARK_STOCK_STATE_PATH
-export MOODMARK_STOCK_DELAY=0.75
+export DATABASE_URL='postgresql://...'
+export MOODMARK_STOCK_DELAY=0
+export MOODMARK_STOCK_ARTICLE_WORKERS=4
+export MOODMARK_STOCK_PRODUCT_WORKERS=12
+export MOODMARK_STOCK_CACHE_HOURS=24
+# 毎回フル取得: export MOODMARK_STOCK_FORCE_FULL=1
 python scripts/run_article_stock_check.py
 ```
 

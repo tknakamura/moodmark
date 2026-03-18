@@ -5,7 +5,11 @@
 
   DATABASE_URL              … 設定時は PostgreSQL に読み書き
   MOODMARK_STOCK_STATE_PATH … JSON モード時のファイルパス（任意）
-  MOODMARK_STOCK_DELAY      … リクエスト間隔（秒）デフォルト 0.75
+  MOODMARK_STOCK_DELAY      … 各ワーカーのリクエスト前待機（秒）デフォルト 0
+  MOODMARK_STOCK_ARTICLE_WORKERS … 記事並列数 デフォルト 4
+  MOODMARK_STOCK_PRODUCT_WORKERS … 商品並列数 デフォルト 12
+  MOODMARK_STOCK_CACHE_HOURS … キャッシュTTL（時間）デフォルト 24
+  MOODMARK_STOCK_FORCE_FULL … 1 ならキャッシュ無視
 
 例:
   cd /path/to/moodmark && python scripts/run_article_stock_check.py
@@ -27,14 +31,40 @@ def main() -> int:
     if not arts:
         print("No articles registered.", file=sys.stderr)
         return 1
-    delay = float(os.environ.get("MOODMARK_STOCK_DELAY", "0.75"))
+    delay = float(os.environ.get("MOODMARK_STOCK_DELAY", "0"))
+    wa = int(os.environ.get("MOODMARK_STOCK_ARTICLE_WORKERS", "4"))
+    wp = int(os.environ.get("MOODMARK_STOCK_PRODUCT_WORKERS", "12"))
+    ttl = float(os.environ.get("MOODMARK_STOCK_CACHE_HOURS", "24"))
+    force = os.environ.get("MOODMARK_STOCK_FORCE_FULL", "").strip() in (
+        "1",
+        "true",
+        "yes",
+    )
+    prev = state.get("last_snapshot")
     print(f"Backend: {store.backend_label}")
-    print(f"Checking {len(arts)} article(s), delay={delay}s …")
-    snap = run_stock_check(arts, request_delay_s=delay)
+    print(
+        f"Articles={len(arts)} workers=({wa},{wp}) delay={delay}s "
+        f"cache_ttl={ttl}h force_full={force}"
+    )
+    snap = run_stock_check(
+        arts,
+        request_delay_s=delay,
+        max_article_workers=wa,
+        max_product_workers=wp,
+        previous_snapshot=prev,
+        cache_ttl_hours=ttl,
+        force_full_refresh=force,
+    )
     store.record_snapshot(snap)
+    rs = snap.get("run_stats") or {}
+    print(
+        f"Articles fetched/cached: {rs.get('articles_fetched')}/{rs.get('articles_cached')}"
+    )
+    print(
+        f"Products fetched/cached: {rs.get('products_fetched')}/{rs.get('products_cached')}"
+    )
     n = len(snap.get("rows") or [])
-    print(f"Done. {n} unique products.")
-    print(f"Run at: {snap.get('run_at')}")
+    print(f"Done. {n} unique products. Run at: {snap.get('run_at')}")
     for w in snap.get("article_warnings") or []:
         print(f"  WARN {w.get('article_url')}: {w.get('message')}")
     return 0
