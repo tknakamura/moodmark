@@ -165,7 +165,7 @@ def image_bytes_to_square_jpeg(
     quality: int,
     *,
     use_ai: bool = False,
-    api_key: str | None = None,
+    api_key: Optional[str] = None,
     model: str = "gpt-4o-mini",
 ) -> Tuple[bytes, Optional[str]]:
     """
