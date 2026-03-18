@@ -93,24 +93,25 @@ def openai_suggest_square_offset(
         sv = wv
         tmax = max(0, hv - sv)
         prompt = (
-            f"This is a product photo. Preview size {wv}x{hv} pixels "
-            f"(same aspect ratio as the original {w}x{h} image).\n"
-            f"We crop a square using the FULL WIDTH ({wv}px), sliding vertically. "
-            f"The square height equals the width ({sv}px).\n"
-            f"Valid `top` (Y of top-left of square): integer from 0 to {tmax}. "
-            f"top=0 shows the top of the image; top={tmax} shows the bottom.\n"
-            f"If the product sits low in the frame (empty space on top), choose a LARGER top "
-            f"so the product is not cut off at the bottom.\n"
-            f"Return ONLY this JSON on one line, no markdown: {{\"top\": <integer>}}"
+            f"This is a product photo. Preview size {wv}x{hv}px "
+            f"(same aspect as original {w}x{h}).\n"
+            f"Square crop: FULL WIDTH ({wv}px), height = width ({sv}px). "
+            f"`top` in 0..{tmax} (larger top = show lower part of image).\n"
+            f"Goals: (1) Entire main product visible, not cut off at bottom. "
+            f"(2) Do NOT frame flush against product edges—leave a little of the "
+            f"natural photo background visible between product and square edges where possible. "
+            f"(3) If product sits low, prefer a slightly SMALLER top than maximum so the "
+            f"product is not jammed against the bottom edge; accept some empty area above if needed.\n"
+            f"Return ONLY JSON: {{\"top\": <integer>}}"
         )
     else:
         sv = hv
         lmax = max(0, wv - sv)
         prompt = (
             f"Product photo preview {wv}x{hv}px (original {w}x{h}px).\n"
-            f"Square crop uses full height ({hv}px), slides horizontally. "
-            f"Valid `left`: 0 to {lmax}.\n"
-            f"Place the main product inside the square.\n"
+            f"Square uses full height ({hv}px), slides horizontally. `left` in 0..{lmax}.\n"
+            f"Keep full product visible. Avoid flush framing—leave a bit of natural background "
+            f"between product and left/right edges of the square when possible.\n"
             f"Return ONLY JSON: {{\"left\": <integer>}}"
         )
 
@@ -160,9 +161,51 @@ def openai_suggest_square_offset(
     return left, top
 
 
+def jpeg_target_size_bytes(
+    img: Image.Image, min_b: int = 10000, max_b: int = 20000
+) -> Tuple[bytes, Optional[str]]:
+    """JPEG を目標ファイルサイズ帯（デフォルト 10〜20KB）に近づける。"""
+
+    def enc(q: int) -> bytes:
+        b = io.BytesIO()
+        img.save(b, format="JPEG", quality=q, optimize=True)
+        return b.getvalue()
+
+    for q in range(95, 39, -1):
+        data = enc(q)
+        if min_b <= len(data) <= max_b:
+            return data, None
+
+    d40 = enc(40)
+    if len(d40) > max_b:
+        return d40, "20KB以下に収まりませんでした（品質40で保存）"
+
+    d95 = enc(95)
+    if len(d95) < min_b:
+        return d95, "10KB以上にできませんでした（画質上限で保存）"
+
+    best_q, best_d = 40, d40
+    best_dist = min(abs(len(d40) - min_b), abs(len(d40) - max_b))
+    if len(d40) > max_b:
+        best_dist = len(d40) - max_b
+    for q in range(41, 96):
+        d = enc(q)
+        L = len(d)
+        if min_b <= L <= max_b:
+            return d, None
+        if L < min_b:
+            dist = min_b - L
+        else:
+            dist = L - max_b
+        if dist < best_dist:
+            best_dist = dist
+            best_q, best_d = q, d
+    kb = len(best_d) // 1024
+    return best_d, f"目標10〜20KBから外れました（約{kb}KB・品質{best_q}）"
+
+
 def image_bytes_to_square_jpeg(
     data: bytes,
-    quality: int,
     *,
     use_ai: bool = False,
     api_key: Optional[str] = None,
@@ -170,6 +213,7 @@ def image_bytes_to_square_jpeg(
 ) -> Tuple[bytes, Optional[str]]:
     """
     Returns (jpeg_bytes, warning_message or None).
+    複数警告は最初の1件に集約する場合は呼び出し側で連結。
     """
     img = Image.open(io.BytesIO(data))
     img = ImageOps.exif_transpose(img)
@@ -191,9 +235,10 @@ def image_bytes_to_square_jpeg(
 
     out = crop_square_at(img, left, top, s)
     out = out.resize(OUTPUT_SIZE, Image.Resampling.LANCZOS)
-    buf = io.BytesIO()
-    out.save(buf, format="JPEG", quality=quality, optimize=True)
-    return buf.getvalue(), warn
+    jpeg, size_warn = jpeg_target_size_bytes(out)
+    if size_warn:
+        warn = f"{warn} {size_warn}".strip() if warn else size_warn
+    return jpeg, warn
 
 
 def safe_stem(name: str) -> str:
@@ -220,6 +265,7 @@ def main():
     st.caption(
         f"**上限**: 最大 {MAX_FILES} 枚・合計 {MAX_TOTAL_BYTES // (1024 * 1024)} MB まで。"
         " 対応: JPEG / PNG / WebP / GIF（HEIC 等は非対応）。"
+        " **JPEG ファイルサイズは約 10〜20KB になるよう品質を自動調整** します。"
     )
 
     mode = st.radio(
@@ -274,8 +320,6 @@ def main():
         st.session_state.pop("_img_crop_results", None)
         st.session_state["_img_crop_sig"] = upload_sig
 
-    quality = st.slider("JPEG 品質", min_value=85, max_value=95, value=90, step=1)
-
     api_key = os.getenv("OPENAI_API_KEY") or ""
     model = os.getenv("OPENAI_CROP_MODEL", "gpt-4o-mini")
 
@@ -289,7 +333,6 @@ def main():
                 raw = f.getvalue()
                 jpeg, warn = image_bytes_to_square_jpeg(
                     raw,
-                    quality,
                     use_ai=use_ai,
                     api_key=api_key if use_ai else None,
                     model=model,
@@ -299,9 +342,7 @@ def main():
                 stem = safe_stem(f.name)
                 n = stem_count.get(stem, 0)
                 stem_count[stem] = n + 1
-                out_name = (
-                    f"{stem}_square.jpg" if n == 0 else f"{stem}_{n + 1}_square.jpg"
-                )
+                out_name = f"{stem}.jpg" if n == 0 else f"{stem}_{n + 1}.jpg"
                 results.append((out_name, jpeg))
             except Exception as e:
                 errors.append(f"{f.name}: {e}")
