@@ -86,7 +86,8 @@ def login_page():
     st.markdown("### 📊 その他のページ")
     # Streamlitのマルチページ機能では、pages/analytics_chat.pyは/analytics_chatでアクセス可能
     st.markdown('[<div style="text-align: center;"><button style="background-color: #2196F3; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📄 コミュニティコンバーター</button></div>](converter_community)', unsafe_allow_html=True)
-    st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
+    st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
+    st.markdown('[<div style="text-align: center;"><button style="background-color: #9C27B0; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">🖼️ 画像正方形クロップ</button></div>](image_resize)', unsafe_allow_html=True)
 
 class CSVToHTMLConverter:
     def __init__(self, article_cgid='S010117', ranking_cgid='J011403', 
@@ -880,7 +881,8 @@ def main():
         # 他のダッシュボードへのリンク
         # Streamlitのマルチページ機能では、pages/analytics_chat.pyは/analytics_chatでアクセス可能
         st.markdown('[<div style="text-align: center;"><button style="background-color: #2196F3; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📄 コミュニティコンバーター</button></div>](converter_community)', unsafe_allow_html=True)
-        st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
+        st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
+        st.markdown('[<div style="text-align: center;"><button style="background-color: #9C27B0; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">🖼️ 画像正方形クロップ</button></div>](image_resize)', unsafe_allow_html=True)
         
         st.markdown("---")
     
