@@ -407,9 +407,10 @@ with tab_view:
                 st.dataframe(
                     article_table,
                     column_config={
+                        # display_text は Streamlit 1.29+ のみ（requirements は 1.28.1）
                         "記事URL": st.column_config.LinkColumn(
-                            "記事を開く",
-                            display_text="開く",
+                            "記事URL",
+                            help="クリックで記事ページを開きます",
                         ),
                         "掲載リンク数": st.column_config.NumberColumn(
                             "掲載リンク数", format="%d", help="記事HTML内の商品URL数"
