@@ -505,9 +505,9 @@ with tab_view:
                 st.info("条件に一致する行がありません。")
             else:
                 table_html = _result_df_to_clickable_html(view)
-                h = min(720, 140 + len(view) * 36)
+                h = min(960, 140 + len(view) * 36)
                 components.html(
-                    f'<div style="overflow:auto;max-height:680px;">{table_html}</div>',
+                    f'<div style="overflow:auto;max-height:920px;">{table_html}</div>',
                     height=h,
                     scrolling=True,
                 )
