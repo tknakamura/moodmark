@@ -44,6 +44,16 @@ ALTER TABLE moodmark_stock_articles
 - **集計期間**: 反映遅延を避けるため、**終端＝今日から3日前**、そこから **さかのぼる7日間**（両端含む）。
 - **突合**: 記事 URL から `pagePath` を取り、GA4 の `pagePath` に **CONTAINS** でフィルタ（`/moodmark`・`/moodmarkgift` 配下ではサイト用 **BEGINS_WITH** と AND）。
 
+### GA4 の商品 itemName・購入数・収益（在庫チェック実行時）
+
+「在庫チェック実行」でオプション **GA4で商品名（itemName）・購入数・収益を取得**（既定 ON）を有効にすると、実行完了後に GA4 Data API で商品行を拡張します。
+
+- **集計期間**: 記事 PV と**同一**（終端＝今日から3日前、そこからさかのぼる7日間）。
+- **メトリクス**: **`itemsPurchased`**（購入ユニット数）、**`itemRevenue`**（アイテム収益・返金控除後。通貨はプロパティ設定に依存）。
+- **ディメンション**: **`itemId`**（商品 URL のパス上スラッグ、例 `MM-…` / `MMV-…` と一致することを想定）、**`itemName`**（一覧の「商品名」表示に優先）。
+- **タグ前提**: EC の `purchase` 等で `items` が送られていること。期間内に購入がない商品は **0** 表示になり得ます。
+- **未設定時**: `GA4_PROPERTY_ID` または認証が無い場合はスキップ（ページ上の商品名のみ）。
+
 ### Render
 
 [render.yaml](../render.yaml) では Web サービス用 PostgreSQL（`moodmark-article-stock`）と `DATABASE_URL` の自動連携を定義しています。Blueprint を初めて適用する場合、ダッシュボードでサービスとDBの作成・紐づけを確認してください。

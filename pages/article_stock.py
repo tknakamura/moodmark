@@ -25,7 +25,10 @@ from csv_to_html_dashboard import (
     render_likepass_footer,
 )
 
-from tools.moodmark_stock.scraper import run_stock_check
+from tools.moodmark_stock.scraper import (
+    product_slug_for_ga4_item_id,
+    run_stock_check,
+)
 from tools.moodmark_stock import state as moodmark_state
 from tools.moodmark_stock.store import get_store
 
@@ -33,7 +36,9 @@ logger = logging.getLogger(__name__)
 
 RESULT_TABLE_HEADERS = {
     "product_url": "商品ページ",
-    "product_name": "商品名",
+    "product_name_display": "商品名",
+    "ga4_items_purchased": "GA4購入数(7日)",
+    "ga4_item_revenue": "GA4収益(7日)",
     "article_count": "記事",
     "stock_label": "在庫表示",
     "article_urls": "掲載記事URL",
@@ -43,7 +48,9 @@ RESULT_TABLE_HEADERS = {
 # 結果表に出す列の順（在庫コード・ボタン文言・サブ文言は非表示）
 RESULT_TABLE_COLUMN_ORDER = [
     "product_url",
-    "product_name",
+    "product_name_display",
+    "ga4_items_purchased",
+    "ga4_item_revenue",
     "article_count",
     "stock_label",
     "article_urls",
@@ -97,6 +104,22 @@ def _result_df_to_clickable_html(df: pd.DataFrame) -> str:
                     if parts
                     else html_escape.escape(s)
                 )
+            elif c == "ga4_items_purchased":
+                if v is None or (isinstance(v, float) and pd.isna(v)):
+                    cell = "—"
+                else:
+                    try:
+                        cell = html_escape.escape(str(int(v)))
+                    except (TypeError, ValueError):
+                        cell = html_escape.escape(str(v))
+            elif c == "ga4_item_revenue":
+                if v is None or (isinstance(v, float) and pd.isna(v)):
+                    cell = "—"
+                else:
+                    try:
+                        cell = html_escape.escape(f"{float(v):,.2f}")
+                    except (TypeError, ValueError):
+                        cell = html_escape.escape(str(v))
             else:
                 cell = html_escape.escape(s)
             tds.append(f"<td>{cell}</td>")
@@ -119,6 +142,111 @@ def _result_df_to_clickable_html(df: pd.DataFrame) -> str:
         f"<colgroup>{colgroup}</colgroup>"
         f"<thead><tr>{th}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
     )
+
+
+def _ensure_product_display_and_ga4_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """古いスナップショット互換: 表示用商品名と GA4 列を揃える。"""
+    df = df.copy()
+    if "product_name" not in df.columns:
+        df["product_name"] = ""
+    else:
+        df["product_name"] = df["product_name"].fillna("").astype(str)
+        df.loc[df["product_name"] == "nan", "product_name"] = ""
+    if "product_name_display" not in df.columns:
+        if "ga4_item_name" in df.columns:
+            gn = df["ga4_item_name"].fillna("").astype(str)
+            df["product_name_display"] = gn.where(gn.str.strip() != "", df["product_name"])
+        else:
+            df["product_name_display"] = df["product_name"]
+    else:
+        df["product_name_display"] = df["product_name_display"].fillna("").astype(str)
+        df.loc[df["product_name_display"] == "nan", "product_name_display"] = ""
+        empty = df["product_name_display"].str.strip() == ""
+        df.loc[empty, "product_name_display"] = df.loc[empty, "product_name"]
+    for c, default in (
+        ("ga4_items_purchased", None),
+        ("ga4_item_revenue", None),
+    ):
+        if c not in df.columns:
+            df[c] = default
+    return df
+
+
+def _enrich_snapshot_rows_ga4_commerce(snap: dict, *, lag_days: int = 3, window_days: int = 7) -> None:
+    """snap['rows'] を in-place で GA4 itemName / 購入数 / 収益で拡張。失敗時はログのみ。"""
+    rows = snap.get("rows") or []
+    if not rows:
+        return
+    try:
+        from analytics.google_apis_integration import GoogleAPIsIntegration
+    except ImportError:
+        logger.warning("GoogleAPIsIntegration をインポートできません")
+        return
+    api = GoogleAPIsIntegration()
+    if not api.ga4_service or not api.ga4_property_id:
+        return
+
+    url_to_slug: dict = {}
+    slugs_ordered: list = []
+    for r in rows:
+        url = (r.get("product_url") or "").strip()
+        if not url:
+            continue
+        sid = product_slug_for_ga4_item_id(url)
+        if sid:
+            url_to_slug[url] = sid
+            slugs_ordered.append(sid)
+    unique_slugs = list(dict.fromkeys(slugs_ordered))
+    if not unique_slugs:
+        for r in rows:
+            scraped = (r.get("product_name") or "").strip()
+            r["product_name_display"] = scraped
+        return
+
+    try:
+        commerce = api.get_item_commerce_by_item_ids(
+            unique_slugs, lag_days=lag_days, window_days=window_days
+        )
+    except Exception as e:
+        logger.warning("GA4 商品コマース取得エラー: %s", e)
+        for r in rows:
+            scraped = (r.get("product_name") or "").strip()
+            r["product_name_display"] = scraped
+        return
+
+    for r in rows:
+        url = (r.get("product_url") or "").strip()
+        sid = url_to_slug.get(url)
+        scraped = (r.get("product_name") or "").strip()
+        if not sid:
+            r["ga4_item_id"] = None
+            r["ga4_item_name"] = ""
+            r["ga4_items_purchased"] = None
+            r["ga4_item_revenue"] = None
+            r["product_name_display"] = scraped
+            continue
+        info = commerce.get(sid)
+        if not info:
+            r["ga4_item_id"] = sid
+            r["ga4_item_name"] = ""
+            r["ga4_items_purchased"] = 0
+            r["ga4_item_revenue"] = 0.0
+            r["product_name_display"] = scraped
+            continue
+        name = (info.get("item_name") or "").strip()
+        ip = info.get("items_purchased")
+        ir = info.get("item_revenue")
+        r["ga4_item_id"] = sid
+        r["ga4_item_name"] = name
+        try:
+            r["ga4_items_purchased"] = int(round(float(ip))) if ip is not None else 0
+        except (TypeError, ValueError):
+            r["ga4_items_purchased"] = 0
+        try:
+            r["ga4_item_revenue"] = float(ir) if ir is not None else 0.0
+        except (TypeError, ValueError):
+            r["ga4_item_revenue"] = 0.0
+        r["product_name_display"] = name or scraped
 
 
 st.set_page_config(
@@ -323,6 +451,12 @@ with tab_run:
         force_full = st.checkbox(
             "強制フルチェック（キャッシュを使わず全件GET）", key="ams_force"
         )
+        fetch_ga4_commerce = st.checkbox(
+            "GA4で商品名（itemName）・購入数・収益を取得",
+            value=True,
+            key="ams_ga4_commerce",
+            help="期間は記事のPV(7日)と同じ（終端3日前から遡る7日）。purchase 由来の指標です。",
+        )
     with c2:
         w_art = st.slider("記事ページ取得の同時接続数", 1, 16, 4, key="ams_wa")
         w_prd = st.slider("商品ページ取得の同時接続数", 1, 32, 12, key="ams_wp")
@@ -397,6 +531,11 @@ with tab_run:
                 except Exception as e:
                     st.error(f"実行エラー: {e}")
                 else:
+                    if fetch_ga4_commerce:
+                        with st.spinner(
+                            "GA4から商品の itemName・購入数・収益を取得中…"
+                        ):
+                            _enrich_snapshot_rows_ga4_commerce(snap)
                     get_store().record_snapshot(snap)
                     _invalidate_state_cache()
                     prog.progress(1.0)
@@ -435,12 +574,9 @@ with tab_view:
             st.warning("商品0件でした。")
         else:
             df = pd.DataFrame(rows)
-            if "product_name" not in df.columns:
-                df["product_name"] = ""
-            else:
-                df["product_name"] = df["product_name"].fillna("").astype(str)
-                df.loc[df["product_name"] == "nan", "product_name"] = ""
-            order_front = ["product_url", "product_name"]
+            df = _ensure_product_display_and_ga4_columns(df)
+            order_front = ["product_url", "product_name_display"]
+            order_ga4 = ["ga4_items_purchased", "ga4_item_revenue"]
             order_mid = [
                 "stock_status",
                 "stock_label",
@@ -451,6 +587,7 @@ with tab_view:
                 "article_labels",
             ]
             cols = [c for c in order_front if c in df.columns]
+            cols += [c for c in order_ga4 if c in df.columns]
             cols += [c for c in order_mid if c in df.columns]
             cols += [c for c in df.columns if c not in cols]
             df = df[cols]
@@ -578,6 +715,11 @@ with tab_view:
                 )
 
             st.subheader("商品一覧")
+            st.caption(
+                "商品名は GA4 の itemName が取得できていればそれを表示し、なければページから取得した名称です。"
+                " GA4購入数・収益は purchase 由来で、記事PV(7日)と同じ期間（終端＝本日から3日前、そこから遡る7日間）。"
+                " 通貨は GA4 プロパティの設定に依存します。"
+            )
             show = st.radio(
                 "表示",
                 ("すべて", "在庫注意のみ", "在庫ありのみ"),

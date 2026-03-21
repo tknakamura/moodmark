@@ -9,8 +9,8 @@ Google APIs統合システム
 import os
 import json
 import pandas as pd
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -1017,6 +1017,27 @@ class GoogleAPIsIntegration:
             }
 
     @staticmethod
+    def ga4_report_date_strings(
+        lag_days: int = 3,
+        window_days: int = 7,
+        *,
+        reference_date: Optional[date] = None,
+    ) -> Tuple[str, str]:
+        """
+        記事PV・商品EC指標で共通化する日付レンジ（両端含む）。
+
+        endDate = reference の日付 - lag_days
+        startDate = endDate - (window_days - 1)
+
+        Returns:
+            (startDate, endDate) as YYYY-MM-DD
+        """
+        ref = reference_date if reference_date is not None else datetime.now().date()
+        end_d = ref - timedelta(days=int(lag_days))
+        start_d = end_d - timedelta(days=int(window_days) - 1)
+        return start_d.strftime("%Y-%m-%d"), end_d.strftime("%Y-%m-%d")
+
+    @staticmethod
     def _ga4_page_path_site_prefix(page_path: str) -> Optional[str]:
         """Reduce cross-site noise when filtering by path (moodmarkgift before moodmark)."""
         p = page_path or ""
@@ -1072,10 +1093,7 @@ class GoogleAPIsIntegration:
         if not self.ga4_service or not self.ga4_property_id:
             raise RuntimeError("GA4サービスまたはプロパティIDが設定されていません")
         path = (page_path or "").strip() or "/"
-        end_d = datetime.now().date() - timedelta(days=int(lag_days))
-        start_d = end_d - timedelta(days=int(window_days) - 1)
-        start_str = start_d.strftime("%Y-%m-%d")
-        end_str = end_d.strftime("%Y-%m-%d")
+        start_str, end_str = self.ga4_report_date_strings(lag_days, window_days)
 
         contains_expr = {
             "filter": {
@@ -1128,6 +1146,116 @@ class GoogleAPIsIntegration:
         total = self._screen_page_views_from_run_report_response(response)
         logger.info("GA4 pagePath PV 合計: %s (path=%r)", total, path)
         return total
+
+    _GA4_ITEM_ID_CHUNK = 40
+
+    def get_item_commerce_by_item_ids(
+        self,
+        item_ids: List[str],
+        *,
+        lag_days: int = 3,
+        window_days: int = 7,
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        itemId ごとに itemName・itemsPurchased・itemRevenue を集計（purchase 系イベント由来）。
+
+        日付は ga4_report_date_strings と同一（記事 PV の遅延7日窓と揃える）。
+
+        Returns:
+            item_id -> {"item_name": str, "items_purchased": float, "item_revenue": float}
+        """
+        out: Dict[str, Dict[str, Any]] = {}
+        if not self.ga4_service or not self.ga4_property_id:
+            logger.warning("GA4 commerce: サービスまたはプロパティIDがありません")
+            return out
+        seen = []
+        for x in item_ids:
+            s = (x or "").strip()
+            if s and s not in seen:
+                seen.append(s)
+        if not seen:
+            return out
+
+        start_str, end_str = self.ga4_report_date_strings(lag_days, window_days)
+        # itemId 単位で合算し、itemName は売上最大行の名称を採用
+        acc: Dict[str, Dict[str, Any]] = {}
+
+        for i in range(0, len(seen), self._GA4_ITEM_ID_CHUNK):
+            chunk = seen[i : i + self._GA4_ITEM_ID_CHUNK]
+            dimension_filter = {
+                "filter": {
+                    "fieldName": "itemId",
+                    "inListFilter": {
+                        "caseSensitive": False,
+                        "values": chunk,
+                    },
+                }
+            }
+            request_body = {
+                "dateRanges": [{"startDate": start_str, "endDate": end_str}],
+                "dimensions": [{"name": "itemId"}, {"name": "itemName"}],
+                "metrics": [{"name": "itemsPurchased"}, {"name": "itemRevenue"}],
+                "dimensionFilter": dimension_filter,
+                "limit": 100000,
+            }
+            try:
+                response = (
+                    self.ga4_service.properties()
+                    .runReport(
+                        property=f"properties/{self.ga4_property_id}",
+                        body=request_body,
+                    )
+                    .execute()
+                )
+            except HttpError as e:
+                logger.error("GA4 item commerce runReport エラー: %s", e)
+                continue
+
+            for row in response.get("rows") or []:
+                dv = row.get("dimensionValues") or []
+                mv = row.get("metricValues") or []
+                if len(dv) < 2:
+                    continue
+                iid = (dv[0].get("value") or "").strip()
+                iname = (dv[1].get("value") or "").strip()
+                if not iid:
+                    continue
+                try:
+                    ip = float((mv[0].get("value") if len(mv) > 0 else 0) or 0)
+                except (TypeError, ValueError):
+                    ip = 0.0
+                try:
+                    ir = float((mv[1].get("value") if len(mv) > 1 else 0) or 0)
+                except (TypeError, ValueError):
+                    ir = 0.0
+
+                if iid not in acc:
+                    acc[iid] = {
+                        "items_purchased": 0.0,
+                        "item_revenue": 0.0,
+                        "item_name": iname,
+                        "_best_rev": -1.0,
+                    }
+                ent = acc[iid]
+                ent["items_purchased"] += ip
+                ent["item_revenue"] += ir
+                if ir >= ent["_best_rev"] and iname:
+                    ent["_best_rev"] = ir
+                    ent["item_name"] = iname
+
+        for iid, ent in acc.items():
+            out[iid] = {
+                "item_name": ent.get("item_name") or "",
+                "items_purchased": ent["items_purchased"],
+                "item_revenue": ent["item_revenue"],
+            }
+        logger.info(
+            "GA4 item commerce: %s itemIds, 期間 %s〜%s",
+            len(out),
+            start_str,
+            end_str,
+        )
+        return out
     
     def get_gsc_data(self, date_range_days=30, dimensions=None, row_limit=25000, site_name='moodmark'):
         """

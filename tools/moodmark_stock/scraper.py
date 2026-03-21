@@ -31,12 +31,14 @@ DEFAULT_UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
+# MM-123（従来）および MMV-0415385006491 形式など
+_PRODUCT_SLUG = r"(?:MM-\d+|MMV-[A-Za-z0-9]+)"
 PRODUCT_PATH_RE = re.compile(
-    r"/moodmark/product/(MM-\d+)\.html",
+    rf"/moodmark/product/({_PRODUCT_SLUG})\.html",
     re.IGNORECASE,
 )
 ABS_PRODUCT_RE = re.compile(
-    r"https://isetan\.mistore\.jp/moodmark/product/(MM-\d+)\.html",
+    rf"https://isetan\.mistore\.jp/moodmark/product/({_PRODUCT_SLUG})\.html",
     re.IGNORECASE,
 )
 
@@ -52,6 +54,27 @@ def canonical_product_url(url_or_path: str) -> Optional[str]:
     if m:
         return f"https://isetan.mistore.jp/moodmark/product/{m.group(1)}.html"
     return None
+
+
+def product_slug_for_ga4_item_id(url_or_path: str) -> Optional[str]:
+    """
+    商品URLから GA4 の itemId 候補（パス上のファイル名ベース、拡張子なし）を返す。
+    canonical に載らない相対パスでも path 正規表現で拾う。
+    """
+    if not (url_or_path or "").strip():
+        return None
+    s = url_or_path.strip()
+    c = canonical_product_url(s)
+    if c:
+        m = ABS_PRODUCT_RE.search(c)
+        if m:
+            return m.group(1)
+    try:
+        path = urlparse(s).path if s.startswith("http") else s
+    except Exception:
+        path = s
+    m = PRODUCT_PATH_RE.search(path or "")
+    return m.group(1) if m else None
 
 
 def extract_product_urls_from_html(html: str, base_url: str = "") -> List[str]:
