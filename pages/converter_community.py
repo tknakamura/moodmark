@@ -31,7 +31,7 @@ from tools.streamlit_branding import render_page_title_with_logo
 
 # ページ設定
 st.set_page_config(
-    page_title="MOODMARK コミュニティコンバーター",
+    page_title="コミュニティコンバーター",
     page_icon="📄",
     layout="wide"
 )
@@ -722,10 +722,9 @@ def main():
     components.html(gtm_script, height=0)
     
     render_page_title_with_logo(
-        "MOODMARK｜コミュニティコンバーター",
+        "コミュニティコンバーター",
         title_element_id="community-converter-title",
     )
-    st.markdown('<p style="font-size: 14px; color: #666; text-align: center; margin-top: -10px;">developed by Takeshi Nakamura</p>', unsafe_allow_html=True)
     st.markdown("---")
     
     # サイドバー
