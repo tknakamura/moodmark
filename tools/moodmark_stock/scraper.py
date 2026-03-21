@@ -18,7 +18,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Collection, Dict, List, Optional, Tuple
+
+from tools.moodmark_stock.state import _normalize_article_url
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -294,12 +296,16 @@ def run_stock_check(
     cache_ttl_hours: float = 24.0,
     force_full_refresh: bool = False,
     progress_callback: Optional[Callable[[str, int, int], None]] = None,
+    only_check_article_urls: Optional[Collection[str]] = None,
 ) -> Dict[str, Any]:
     """
     登録記事を巡回し商品URLを集め、各商品の在庫を取得する。
 
     previous_snapshot: 直前の実行結果（cache_meta を含む）。TTL内スキップに使用。
-    force_full_refresh: True ならキャッシュを使わず全GET。
+    force_full_refresh: True ならキャッシュを使わず全GET（only_check_article_urls で選ばれた記事のみ対象）。
+    only_check_article_urls: 指定時はその記事URLだけ記事ページをTTL判定・再取得する。
+        それ以外の登録記事は previous_snapshot の article_to_products / cache_meta を引き継ぐ。
+        前回スナップショットがない場合、対象外記事は商品0件扱い。
     """
     now = datetime.now(timezone.utc)
     run_at = now.isoformat()
@@ -310,13 +316,53 @@ def run_stock_check(
     articles_cached = cm_prev.get("articles") or {}
     products_cached = cm_prev.get("products") or {}
 
-    article_urls = [(art.get("url") or "").strip() for art in articles if (art.get("url") or "").strip()]
+    all_article_urls = [
+        (art.get("url") or "").strip() for art in articles if (art.get("url") or "").strip()
+    ]
+
+    check_set: Optional[set] = None
+    if only_check_article_urls is not None:
+        check_set = set()
+        for u in only_check_article_urls:
+            raw = (u or "").strip()
+            if not raw:
+                continue
+            nu = _normalize_article_url(raw)
+            if nu:
+                check_set.add(nu)
+
+    prev_atp: Dict[str, Any] = {}
+    if previous_snapshot and isinstance(previous_snapshot.get("article_to_products"), dict):
+        prev_atp = previous_snapshot["article_to_products"]
+
+    def _article_in_refresh_scope(aurl: str) -> bool:
+        if check_set is None:
+            return True
+        key = _normalize_article_url(aurl) or aurl
+        return key in check_set
 
     article_to_products: Dict[str, List[str]] = {}
     article_warnings: List[Dict[str, str]] = []
     need_article_fetch: List[str] = []
 
-    for aurl in article_urls:
+    for aurl in all_article_urls:
+        if not _article_in_refresh_scope(aurl):
+            prods = prev_atp.get(aurl)
+            if isinstance(prods, list):
+                article_to_products[aurl] = [p for p in prods if isinstance(p, str)]
+            else:
+                article_to_products[aurl] = []
+            if not previous_snapshot:
+                article_warnings.append(
+                    {
+                        "article_url": aurl,
+                        "message": (
+                            "前回スナップショットがないため、部分チェック対象外の記事は商品0件として扱いました"
+                        ),
+                    }
+                )
+            continue
+
         if force_full_refresh:
             need_article_fetch.append(aurl)
             continue
@@ -376,7 +422,7 @@ def run_stock_check(
 
     all_products_order: List[str] = []
     seen_p: set = set()
-    for aurl in article_urls:
+    for aurl in all_article_urls:
         for p in article_to_products.get(aurl, []):
             if p not in seen_p:
                 seen_p.add(p)
@@ -458,7 +504,17 @@ def run_stock_check(
 
     # cache_meta 更新
     cache_articles: Dict[str, Any] = {}
-    for aurl in article_urls:
+    for aurl in all_article_urls:
+        if not _article_in_refresh_scope(aurl):
+            if aurl in articles_cached and isinstance(articles_cached[aurl], dict):
+                cache_articles[aurl] = deepcopy(articles_cached[aurl])
+            else:
+                cache_articles[aurl] = {
+                    "fetched_at": str((previous_snapshot or {}).get("run_at") or run_at),
+                    "products": list(article_to_products.get(aurl, [])),
+                }
+            continue
+
         if aurl in need_article_fetch:
             if aurl in article_fetch_errors:
                 if aurl in articles_cached:
@@ -513,10 +569,16 @@ def run_stock_check(
         "cache_meta": {"articles": cache_articles, "products": cache_products},
         "run_stats": {
             "articles_fetched": len(need_article_fetch),
-            "articles_cached": len(article_urls) - len(need_article_fetch),
+            "articles_cached": len(all_article_urls) - len(need_article_fetch),
             "products_fetched": len(need_product_fetch),
             "products_cached": len(all_products_order) - len(need_product_fetch),
             "cache_ttl_hours": cache_ttl_hours,
             "force_full_refresh": force_full_refresh,
+            "articles_refresh_target": sum(
+                1 for u in all_article_urls if _article_in_refresh_scope(u)
+            ),
+            "articles_preserved_without_fetch": sum(
+                1 for u in all_article_urls if not _article_in_refresh_scope(u)
+            ),
         },
     }

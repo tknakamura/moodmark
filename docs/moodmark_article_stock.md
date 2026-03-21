@@ -73,6 +73,12 @@ python scripts/migrate_article_stock_json_to_db.py /path/to/article_stock_state.
 - **TTL キャッシュ**（既定 24 時間）: 前回スナップショットの `cache_meta` を使い、期間内の記事は掲載商品URLの再取得を省略、商品は在庫結果の再取得を省略。**強制フルチェック**で無効化可能。
 - 記事取得失敗・商品取得エラー時は、その URL のキャッシュを更新せず次回再試行します。
 
+### 特定記事だけ在庫チェック（部分実行）
+
+Streamlit の「在庫チェック実行」では **在庫チェックする記事** を複数選択できます。一部だけ選ぶと、その記事の HTML のみ再取得し、**選んでいない記事は直前のスナップショット**の `article_to_products`（と記事側 `cache_meta`）を引き継ぎます。初回実行前に部分だけ走らせると、未選択記事は商品0件扱いになる点に注意してください。
+
+CLI では環境変数 **`MOODMARK_STOCK_ONLY_URLS`** にカンマ区切りで記事URLを渡すと同様に部分実行になります（`previous_snapshot` として DB / JSON の最終結果が読み込まれる前提）。
+
 ## 定期実行（手動以外）
 
 ```bash
@@ -82,6 +88,7 @@ export MOODMARK_STOCK_ARTICLE_WORKERS=4
 export MOODMARK_STOCK_PRODUCT_WORKERS=12
 export MOODMARK_STOCK_CACHE_HOURS=24
 # 毎回フル取得: export MOODMARK_STOCK_FORCE_FULL=1
+# 特定記事のみ: export MOODMARK_STOCK_ONLY_URLS='https://...,https://...'
 python scripts/run_article_stock_check.py
 ```
 

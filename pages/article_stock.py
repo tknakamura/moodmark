@@ -338,54 +338,89 @@ with tab_run:
     st.caption(
         "**推奨**: 待機 **0.3〜0.5秒**（既定 0.5秒）。短すぎると相手サーバへの負荷・ブロックのリスクが上がります。"
     )
+    st.caption(
+        "**記事の絞り込み**: 下で選んだ記事だけ記事ページを再取得します。"
+        " 選んでいない記事は**前回の実行結果**をそのまま表示用データに使います（初回のみ前回がないため未選択は商品0件になります）。"
+    )
     arts = _get_state().get("articles") or []
     if not arts:
         st.warning("先に「記事URLの管理」で記事を登録してください。")
     else:
-        st.write(f"対象記事: **{len(arts)}** 件")
+        article_url_options = []
+        url_labels = {}
+        for a in arts:
+            u = (a.get("url") or "").strip()
+            if not u:
+                continue
+            article_url_options.append(u)
+            url_labels[u] = f"{a.get('label') or u} ({a.get('id', '')})"
+        selected_urls = st.multiselect(
+            "在庫チェックする記事",
+            options=article_url_options,
+            default=article_url_options,
+            format_func=lambda u: url_labels.get(u, u),
+            key="ams_article_scope",
+            help="すべて選択＝従来どおり全記事が対象。一部だけ選ぶと部分チェックになります。",
+        )
+        st.write(f"登録記事: **{len(article_url_options)}** 件 / 今回チェック: **{len(selected_urls)}** 件")
         if st.button("実行", type="primary", key="ams_run"):
-            arts_now = get_store().load_state().get("articles") or []
-            prev_snap = get_store().load_state().get("last_snapshot")
-            prog = st.progress(0.0)
-            status = st.empty()
-
-            def cb(msg, cur, tot):
-                if tot:
-                    prog.progress(min(1.0, (cur + 1) / max(tot, 1)))
-                status.text(msg[-120:] if msg else "")
-
-            try:
-                snap = run_stock_check(
-                    arts_now,
-                    request_delay_s=delay,
-                    max_article_workers=int(w_art),
-                    max_product_workers=int(w_prd),
-                    previous_snapshot=prev_snap,
-                    cache_ttl_hours=float(ttl_h),
-                    force_full_refresh=force_full,
-                    progress_callback=cb,
-                )
-            except Exception as e:
-                st.error(f"実行エラー: {e}")
+            if not selected_urls:
+                st.warning("1件以上選んでください。")
             else:
-                get_store().record_snapshot(snap)
-                _invalidate_state_cache()
-                prog.progress(1.0)
-                status.text("完了")
-                rs = snap.get("run_stats") or {}
-                st.info(
-                    f"記事: 新規取得 {rs.get('articles_fetched', 0)} / キャッシュ利用 {rs.get('articles_cached', 0)} ・ "
-                    f"商品: 新規取得 {rs.get('products_fetched', 0)} / キャッシュ利用 {rs.get('products_cached', 0)}"
-                )
-                w = snap.get("article_warnings") or []
-                if w:
-                    st.warning("警告（記事ごと）:")
-                    for x in w:
-                        st.write(f"- `{x.get('article_url')}`: {x.get('message')}")
-                st.success(
-                    f"完了: 商品 {len(snap.get('rows') or [])} 件（実行時刻: {snap.get('run_at', '')}）"
-                )
-                st.balloons()
+                arts_now = get_store().load_state().get("articles") or []
+                prev_snap = get_store().load_state().get("last_snapshot")
+                all_set = set(article_url_options)
+                sel_set = set(selected_urls)
+                only_urls = None
+                if sel_set != all_set or len(selected_urls) != len(article_url_options):
+                    only_urls = list(selected_urls)
+                prog = st.progress(0.0)
+                status = st.empty()
+
+                def cb(msg, cur, tot):
+                    if tot:
+                        prog.progress(min(1.0, (cur + 1) / max(tot, 1)))
+                    status.text(msg[-120:] if msg else "")
+
+                try:
+                    snap = run_stock_check(
+                        arts_now,
+                        request_delay_s=delay,
+                        max_article_workers=int(w_art),
+                        max_product_workers=int(w_prd),
+                        previous_snapshot=prev_snap,
+                        cache_ttl_hours=float(ttl_h),
+                        force_full_refresh=force_full,
+                        progress_callback=cb,
+                        only_check_article_urls=only_urls,
+                    )
+                except Exception as e:
+                    st.error(f"実行エラー: {e}")
+                else:
+                    get_store().record_snapshot(snap)
+                    _invalidate_state_cache()
+                    prog.progress(1.0)
+                    status.text("完了")
+                    rs = snap.get("run_stats") or {}
+                    extra = ""
+                    if rs.get("articles_preserved_without_fetch"):
+                        extra = (
+                            f" ・ 前回結果を維持した記事 {rs.get('articles_preserved_without_fetch', 0)} 件"
+                        )
+                    st.info(
+                        f"記事: 新規取得 {rs.get('articles_fetched', 0)} / キャッシュ利用 {rs.get('articles_cached', 0)}"
+                        f"{extra} ・ "
+                        f"商品: 新規取得 {rs.get('products_fetched', 0)} / キャッシュ利用 {rs.get('products_cached', 0)}"
+                    )
+                    w = snap.get("article_warnings") or []
+                    if w:
+                        st.warning("警告（記事ごと）:")
+                        for x in w:
+                            st.write(f"- `{x.get('article_url')}`: {x.get('message')}")
+                    st.success(
+                        f"完了: 商品 {len(snap.get('rows') or [])} 件（実行時刻: {snap.get('run_at', '')}）"
+                    )
+                    st.balloons()
 
 with tab_view:
     state = _get_state()
