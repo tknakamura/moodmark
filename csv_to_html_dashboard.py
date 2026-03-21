@@ -49,6 +49,13 @@ def check_authentication():
     return st.session_state.authenticated
 
 
+def require_dashboard_login() -> None:
+    """未ログインならログイン UI を表示してスクリプトを終了。set_page_config の直後に呼ぶ。"""
+    if not check_authentication():
+        login_page()
+        st.stop()
+
+
 def render_likepass_footer():
     """全ダッシュボード共通フッター（MI Business Online 相当）"""
     st.markdown(
@@ -882,17 +889,18 @@ def main():
         page_icon="📄",
         layout="wide"
     )
-    
-    # サイドバーにナビゲーションを追加
+    require_dashboard_login()
+
+    # サイドバーにナビゲーションを追加（ログイン後のみ）
     with st.sidebar:
         st.markdown("### 🔗 ダッシュボード")
         st.markdown("---")
-        
+
         # 現在のページを強調表示
         st.markdown("**📄 CSV to HTML コンバーター**")
         st.markdown("（現在のページ）")
         st.markdown("")
-        
+
         # 他のダッシュボードへのリンク
         # Streamlitのマルチページ機能では、pages/analytics_chat.pyは/analytics_chatでアクセス可能
         st.markdown('[<div style="text-align: center;"><button style="background-color: #2196F3; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📄 コミュニティコンバーター</button></div>](converter_community)', unsafe_allow_html=True)
@@ -901,12 +909,7 @@ def main():
         st.markdown('[<div style="text-align: center;"><button style="background-color: #009688; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📦 記事掲載商品・在庫</button></div>](article_stock)', unsafe_allow_html=True)
 
         st.markdown("---")
-    
-    # 認証チェック
-    if not check_authentication():
-        login_page()
-        return
-    
+
     # Google Tag Manager - 親ウィンドウに動的に挿入
     gtm_script = """
     <script>

@@ -29,7 +29,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 from analytics.ai_analytics_chat import AIAnalyticsChat
-from csv_to_html_dashboard import render_likepass_footer
+from csv_to_html_dashboard import render_likepass_footer, require_dashboard_login
 from tools.streamlit_branding import render_page_title_with_logo
 
 # ページ設定（最初のStreamlitコマンドである必要がある）
@@ -38,6 +38,7 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
+require_dashboard_login()
 
 # タイトル
 render_page_title_with_logo(

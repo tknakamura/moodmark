@@ -18,11 +18,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from csv_to_html_dashboard import (
-    check_authentication,
-    login_page,
-    render_likepass_footer,
-)
+from csv_to_html_dashboard import render_likepass_footer, require_dashboard_login
 
 from tools.moodmark_stock.scraper import (
     product_slug_for_ga4_item_id,
@@ -256,9 +252,7 @@ st.set_page_config(
     layout="wide",
 )
 
-if not check_authentication():
-    login_page()
-    st.stop()
+require_dashboard_login()
 
 with st.sidebar:
     st.markdown("### 🔗 ダッシュボード")

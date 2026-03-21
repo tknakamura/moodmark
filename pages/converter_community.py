@@ -20,13 +20,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 # 認証関連の関数（既存のcsv_to_html_dashboard.pyからインポート）
-from csv_to_html_dashboard import (
-    load_users,
-    verify_password,
-    check_authentication,
-    login_page,
-    render_likepass_footer,
-)
+from csv_to_html_dashboard import render_likepass_footer, require_dashboard_login
 from tools.streamlit_branding import render_page_title_with_logo
 
 # ページ設定
@@ -669,28 +663,25 @@ class CommunityCSVToHTMLConverter:
         return 'dummy'
 
 def main():
-    # サイドバーにナビゲーションを追加
+    require_dashboard_login()
+
+    # サイドバーにナビゲーションを追加（ログイン後のみ）
     with st.sidebar:
         st.markdown("### 🔗 ダッシュボード")
         st.markdown("---")
-        
+
         # 現在のページを強調表示
         st.markdown("**📄 コミュニティコンバーター**")
         st.markdown("（現在のページ）")
         st.markdown("")
-        
+
         # 他のダッシュボードへのリンク
         st.markdown('[<div style="text-align: center;"><button style="background-color: #4CAF50; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📄 CSV to HTML コンバーター</button></div>](/)', unsafe_allow_html=True)
         st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
         st.markdown('[<div style="text-align: center;"><button style="background-color: #009688; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📦 記事掲載商品・在庫</button></div>](article_stock)', unsafe_allow_html=True)
-        
+
         st.markdown("---")
-    
-    # 認証チェック
-    if not check_authentication():
-        login_page()
-        return
-    
+
     # Google Tag Manager - 親ウィンドウに動的に挿入
     gtm_script = """
     <script>
