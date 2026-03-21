@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import pandas as pd
-import streamlit.components.v1 as components
 import streamlit as st
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -134,11 +133,7 @@ def _result_df_to_clickable_html(df: pd.DataFrame) -> str:
         else:
             colgroup += "<col>"
     return (
-        "<style>.article-stock-result-table a{color:#1976d2;text-decoration:underline;}"
-        ".article-stock-result-table td{vertical-align:top;word-break:break-all;}"
-        ".article-stock-result-table th,.article-stock-result-table td{padding:8px;border:1px solid #ddd;}"
-        ".article-stock-result-table th{background:#f5f5f5;}</style>"
-        '<table class="article-stock-result-table" style="border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed;">'
+        '<table class="article-stock-result-table">'
         f"<colgroup>{colgroup}</colgroup>"
         f"<thead><tr>{th}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
     )
@@ -346,6 +341,24 @@ st.markdown(
   flex: 1; justify-content: center; min-width: 0;
   padding: 12px 16px; min-height: 48px;
 }
+/* 商品一覧: 記事別サマリ（st.dataframe）に近い本文スケール */
+.article-stock-result-table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+  font-size: 0.875rem;
+  line-height: 1.375;
+  font-family: inherit;
+}
+.article-stock-result-table a {
+  color: #1976d2;
+  text-decoration: underline;
+  font-size: inherit;
+}
+.article-stock-result-table td { vertical-align: top; word-break: break-all; }
+.article-stock-result-table th,
+.article-stock-result-table td { padding: 8px; border: 1px solid #ddd; }
+.article-stock-result-table th { background: #f5f5f5; }
 </style>""",
     unsafe_allow_html=True,
 )
@@ -764,11 +777,10 @@ with tab_view:
                 st.info("条件に一致する行がありません。")
             else:
                 table_html = _result_df_to_clickable_html(view)
-                h = min(960, 140 + len(view) * 36)
-                components.html(
+                # メイン DOM で描画（st.dataframe と同じフォント階層を継承）。iframe の components.html は避ける。
+                st.markdown(
                     f'<div style="overflow:auto;max-height:920px;">{table_html}</div>',
-                    height=h,
-                    scrolling=True,
+                    unsafe_allow_html=True,
                 )
 
 with tab_backup:
