@@ -27,6 +27,7 @@ from csv_to_html_dashboard import (
     login_page,
     render_likepass_footer,
 )
+from tools.streamlit_branding import render_page_title_with_logo
 
 # ページ設定
 st.set_page_config(
@@ -720,7 +721,10 @@ def main():
     """
     components.html(gtm_script, height=0)
     
-    st.title("MOODMARK｜コミュニティコンバーター")
+    render_page_title_with_logo(
+        "MOODMARK｜コミュニティコンバーター",
+        title_element_id="community-converter-title",
+    )
     st.markdown('<p style="font-size: 14px; color: #666; text-align: center; margin-top: -10px;">developed by Takeshi Nakamura</p>', unsafe_allow_html=True)
     st.markdown("---")
     

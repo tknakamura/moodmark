@@ -7,6 +7,8 @@ CSV to HTML Converter Dashboard
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+from tools.streamlit_branding import render_page_title_with_logo
 import pandas as pd
 import re
 from datetime import datetime
@@ -59,7 +61,7 @@ def render_likepass_footer():
 
 def login_page():
     """ログインページを表示"""
-    st.title("🔐 ログイン")
+    render_page_title_with_logo("🔐 ログイン", title_element_id="login-title")
     st.markdown("---")
     
     with st.form("login_form"):
@@ -876,7 +878,7 @@ class CSVToHTMLConverter:
 
 def main():
     st.set_page_config(
-        page_title="MOODMARK CSV to HTML Converter",
+        page_title="CSV to HTML コンバーター",
         page_icon="📄",
         layout="wide"
     )
@@ -941,8 +943,10 @@ def main():
     """
     components.html(gtm_script, height=0)
     
-    st.title("MOODMARK｜CSV to HTML コンバーター")
-    st.markdown('<p style="font-size: 14px; color: #666; text-align: center; margin-top: -10px;">developed by Takeshi Nakamura</p>', unsafe_allow_html=True)
+    render_page_title_with_logo(
+        "CSV to HTML コンバーター",
+        title_element_id="csv-html-converter-title",
+    )
     st.markdown("---")
     
     # サイドバー

@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import DateTime, Integer, String, and_, create_engine, delete, select, text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Session, mapped_column
 
 from tools.moodmark_stock import state as state_mod
@@ -436,21 +437,33 @@ class PostgresArticleStockStore(ArticleStockStore):
 
 
 _pg_store: Optional[PostgresArticleStockStore] = None
+_postgres_init_failed: bool = False
 
 
 def get_store() -> ArticleStockStore:
-    """DATABASE_URL ありなら PostgreSQL、なければ JSON ファイル。"""
-    global _pg_store
+    """DATABASE_URL ありなら PostgreSQL、接続失敗時・未設定なら JSON ファイル。"""
+    global _pg_store, _postgres_init_failed
     url = os.environ.get("DATABASE_URL", "").strip()
-    if url:
+    if url and not _postgres_init_failed:
         if _pg_store is None:
-            _pg_store = PostgresArticleStockStore(url)
-        return _pg_store
+            try:
+                _pg_store = PostgresArticleStockStore(url)
+            except SQLAlchemyError as e:
+                logger.warning(
+                    "DATABASE_URL は設定されていますが PostgreSQL に接続できません。"
+                    " JSON ファイルにフォールバックします: %s",
+                    e,
+                )
+                _postgres_init_failed = True
+                _pg_store = None
+        if _pg_store is not None:
+            return _pg_store
     p = os.environ.get("MOODMARK_STOCK_STATE_PATH", "").strip()
     return JsonArticleStockStore(p if p else None)
 
 
 def reset_postgres_store_cache() -> None:
     """テスト用: DATABASE_URL を差し替える前に呼ぶ。"""
-    global _pg_store
+    global _pg_store, _postgres_init_failed
     _pg_store = None
+    _postgres_init_failed = False

@@ -35,6 +35,7 @@ from tools.moodmark_stock.snapshot_display import (
     registered_article_urls,
 )
 from tools.moodmark_stock.store import get_store
+from tools.streamlit_branding import render_page_title_with_logo
 
 logger = logging.getLogger(__name__)
 
@@ -321,13 +322,22 @@ def _sync_article_ga4_pageviews(store, article_id: str, article_url: str) -> Non
         )
 
 
-st.title("📦 記事掲載商品の在庫")
+render_page_title_with_logo(
+    "📦 記事掲載商品の在庫",
+    title_element_id="article-stock-title",
+)
 st.caption("登録した特集記事から商品URLを抽出し、在庫状態をまとめて表示します。")
 
 store = get_store()
-if os.environ.get("DATABASE_URL", "").strip():
+if store.backend_label == "postgresql":
     st.success(
         "データ保存先: **PostgreSQL**（`DATABASE_URL`）。記事一覧と実行履歴（最新結果）がDBに保存されます。"
+    )
+elif os.environ.get("DATABASE_URL", "").strip():
+    st.warning(
+        "`DATABASE_URL` は設定されていますが、PostgreSQL に接続できないため **JSON** にフォールバックしています。"
+        f" 保存先: `{store.backend_label.split(':', 1)[-1]}`。"
+        " 接続URL・ユーザー名を確認するか、ローカルでは未使用なら `DATABASE_URL` を外してください。"
     )
 else:
     st.info(

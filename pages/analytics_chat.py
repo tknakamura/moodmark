@@ -30,6 +30,7 @@ sys.path.append(project_root)
 
 from analytics.ai_analytics_chat import AIAnalyticsChat
 from csv_to_html_dashboard import render_likepass_footer
+from tools.streamlit_branding import render_page_title_with_logo
 
 # ページ設定（最初のStreamlitコマンドである必要がある）
 st.set_page_config(
@@ -39,7 +40,10 @@ st.set_page_config(
 )
 
 # タイトル
-st.title("📊 GA4/GSC AI分析チャット")
+render_page_title_with_logo(
+    "📊 GA4/GSC AI分析チャット",
+    title_element_id="analytics-chat-title",
+)
 st.markdown("Google Analytics 4とGoogle Search ConsoleのデータをAIが分析し、質問にお答えします。")
 
 # セッション状態の初期化（最初に実行）

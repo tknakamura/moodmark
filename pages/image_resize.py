@@ -20,6 +20,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 from csv_to_html_dashboard import check_authentication, login_page, render_likepass_footer
+from tools.streamlit_branding import render_page_title_with_logo
 
 MAX_FILES = 30
 MAX_TOTAL_BYTES = 50 * 1024 * 1024
@@ -265,7 +266,10 @@ def main():
         login_page()
         return
 
-    st.title("🖼️ 画像正方形クロップ")
+    render_page_title_with_logo(
+        "🖼️ 画像正方形クロップ",
+        title_element_id="image-resize-title",
+    )
     st.markdown(
         "短辺に合わせて長辺を切り落とし正方形にし、**600×600 ピクセル** の JPEG にします。"
     )
