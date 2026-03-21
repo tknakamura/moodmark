@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 RESULT_TABLE_HEADERS = {
     "product_url": "商品ページ",
     "product_name_display": "商品名",
-    "ga4_items_purchased": "GA4購入数(7日)",
-    "ga4_item_revenue": "GA4収益(7日)",
+    "ga4_items_purchased": "購入数",
+    "ga4_item_revenue": "収益",
     "article_count": "記事",
     "stock_label": "在庫表示",
     "article_urls": "掲載記事URL",
@@ -671,12 +671,19 @@ with tab_view:
             if not summary_rows:
                 st.info("記事別の集計データがありません。")
             else:
+                summary_sort = st.radio(
+                    "並べ替え（多い順）",
+                    ("PV(7日)", "在庫注意率"),
+                    horizontal=True,
+                    key="ams_article_summary_sort",
+                )
                 table_rows = []
                 for r in summary_rows:
                     n = int(r["掲載数"])
                     bad = int(r["在庫注意"])
                     ok = n - bad
                     rate = f"{bad / n * 100:.1f}%" if n else "—"
+                    sort_oos_rate = (bad / n) if n else float("nan")
                     u = str(r.get("article_url") or "").strip()
                     if u and not u.startswith(("http://", "https://")):
                         u = "https://" + u.lstrip("/")
@@ -690,13 +697,26 @@ with tab_view:
                             "在庫注意率": rate,
                             "PV(7日)": pv_cell,
                             "記事URL": u,
+                            "_sort_oos_rate": sort_oos_rate,
                         }
                     )
                 article_table = pd.DataFrame(table_rows)
-                article_table = article_table.sort_values(
-                    ["在庫注意", "掲載リンク数"],
-                    ascending=[False, False],
-                    kind="mergesort",
+                if summary_sort == "PV(7日)":
+                    article_table = article_table.sort_values(
+                        ["PV(7日)", "掲載リンク数"],
+                        ascending=[False, False],
+                        na_position="last",
+                        kind="mergesort",
+                    )
+                else:
+                    article_table = article_table.sort_values(
+                        ["_sort_oos_rate", "在庫注意"],
+                        ascending=[False, False],
+                        na_position="last",
+                        kind="mergesort",
+                    )
+                article_table = article_table.drop(
+                    columns=["_sort_oos_rate"], errors="ignore"
                 )
                 st.dataframe(
                     article_table,
@@ -730,14 +750,19 @@ with tab_view:
             st.subheader("商品一覧")
             st.caption(
                 "商品名は GA4 の itemName が取得できていればそれを表示し、なければページから取得した名称です。"
-                " GA4購入数・収益は purchase 由来で、記事PV(7日)と同じ期間（終端＝本日から3日前、そこから遡る7日間）。"
-                " 通貨は GA4 プロパティの設定に依存します。"
             )
             show = st.radio(
                 "表示",
                 ("すべて", "在庫注意のみ", "在庫ありのみ"),
                 index=1,
                 horizontal=True,
+            )
+            product_sort = st.radio(
+                "並べ替え（多い順）",
+                ("記事数", "購入数", "収益"),
+                index=2,
+                horizontal=True,
+                key="ams_product_sort",
             )
             multi_article_only = st.checkbox(
                 "2記事以上に掲載されている商品のみ",
@@ -756,10 +781,6 @@ with tab_view:
                 view = view[view["stock_status"] == "in_stock"]
             if multi_article_only:
                 view = view[view["article_count"] >= 2]
-            if show == "在庫注意のみ":
-                view = view.sort_values(
-                    "article_count", ascending=False, kind="mergesort"
-                )
             view = view.drop(columns=["_oos"], errors="ignore")
             if art_filter != "（すべて）":
                 art = next(
@@ -776,6 +797,31 @@ with tab_view:
             if view.empty:
                 st.info("条件に一致する行がありません。")
             else:
+                sort_col = {
+                    "記事数": "article_count",
+                    "購入数": "ga4_items_purchased",
+                    "収益": "ga4_item_revenue",
+                }[product_sort]
+                tie = "product_url" if "product_url" in view.columns else None
+                if tie:
+                    view = view.sort_values(
+                        by=[sort_col, tie],
+                        ascending=[False, True],
+                        na_position="last",
+                        kind="mergesort",
+                    )
+                else:
+                    view = view.sort_values(
+                        by=[sort_col],
+                        ascending=[False],
+                        na_position="last",
+                        kind="mergesort",
+                    )
+                st.caption(
+                    "「購入数」「収益」は GA4 の purchase ベース（記事PV(7日)と同じ期間："
+                    " 終端＝本日から3日前、そこから遡る7日間）。"
+                    " 通貨は GA4 プロパティの設定に依存します。"
+                )
                 table_html = _result_df_to_clickable_html(view)
                 # メイン DOM で描画（st.dataframe と同じフォント階層を継承）。iframe の components.html は避ける。
                 st.markdown(
