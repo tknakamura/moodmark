@@ -23,7 +23,9 @@ Streamlit ダッシュボードのページ **`/article_stock`**（[pages/articl
 
 #### 既存 PostgreSQL へのカラム追加（GA4 表示回数）
 
-`create_all` だけでは既存テーブルに列が増えないため、**すでに `moodmark_stock_articles` がある環境**では次を一度実行してください（新規作成の DB では不要なことが多いです）。
+アプリ起動時に [store.py](../tools/moodmark_stock/store.py) が **`ADD COLUMN IF NOT EXISTS`** で GA4 用の列を自動追加します（手動 SQL は原則不要）。
+
+手動で実行する場合や、自動追加に失敗したとき用の例:
 
 ```sql
 ALTER TABLE moodmark_stock_articles

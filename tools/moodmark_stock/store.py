@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from abc import ABC, abstractmethod
@@ -13,13 +14,34 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import DateTime, Integer, String, and_, create_engine, delete, select
+from sqlalchemy import DateTime, Integer, String, and_, create_engine, delete, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Session, mapped_column
 
 from tools.moodmark_stock import state as state_mod
 
 STATE_VERSION = state_mod.STATE_VERSION
+
+logger = logging.getLogger(__name__)
+
+# 既存DBは create_all では列が増えないため、起動時に冪等で追加する
+_PG_ARTICLE_GA4_ALTER_SQL = (
+    "ALTER TABLE moodmark_stock_articles ADD COLUMN IF NOT EXISTS ga4_pageviews_7d INTEGER",
+    "ALTER TABLE moodmark_stock_articles ADD COLUMN IF NOT EXISTS ga4_pv_fetched_at TIMESTAMPTZ",
+    "ALTER TABLE moodmark_stock_articles ADD COLUMN IF NOT EXISTS ga4_pv_error VARCHAR(512)",
+)
+
+
+def _ensure_postgres_article_ga4_columns(engine) -> None:
+    try:
+        with engine.begin() as conn:
+            for stmt in _PG_ARTICLE_GA4_ALTER_SQL:
+                conn.execute(text(stmt))
+    except Exception as e:
+        logger.error("moodmark_stock_articles の GA4 列追加に失敗しました: %s", e)
+        raise
+    else:
+        logger.info("moodmark_stock_articles の GA4 列を確認しました（無ければ追加済み）")
 
 
 def _optional_int(value: Any) -> Optional[int]:
@@ -211,6 +233,7 @@ class PostgresArticleStockStore(ArticleStockStore):
             max_overflow=5,
         )
         Base.metadata.create_all(self._engine)
+        _ensure_postgres_article_ga4_columns(self._engine)
 
     @property
     def backend_label(self) -> str:
