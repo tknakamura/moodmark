@@ -19,7 +19,11 @@ from PIL import Image, ImageOps
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
-from csv_to_html_dashboard import render_likepass_footer, require_dashboard_login
+from csv_to_html_dashboard import (
+    render_dashboard_sidebar_nav,
+    render_likepass_footer,
+    require_dashboard_login,
+)
 from tools.streamlit_branding import render_page_title_with_logo
 
 MAX_FILES = 30
@@ -263,6 +267,9 @@ def main():
     )
 
     require_dashboard_login()
+
+    with st.sidebar:
+        render_dashboard_sidebar_nav()
 
     render_page_title_with_logo(
         "🖼️ 画像正方形クロップ",

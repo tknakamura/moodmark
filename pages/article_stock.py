@@ -18,7 +18,11 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from csv_to_html_dashboard import render_likepass_footer, require_dashboard_login
+from csv_to_html_dashboard import (
+    render_dashboard_sidebar_nav,
+    render_likepass_footer,
+    require_dashboard_login,
+)
 
 from tools.moodmark_stock.scraper import (
     product_slug_for_ga4_item_id,
@@ -255,28 +259,7 @@ st.set_page_config(
 require_dashboard_login()
 
 with st.sidebar:
-    st.markdown("### 🔗 ダッシュボード")
-    st.markdown("---")
-    st.markdown("**📦 記事掲載商品・在庫**")
-    st.markdown("（現在のページ）")
-    st.markdown("")
-    st.markdown(
-        '[<div style="text-align: center;"><button style="background-color: #4CAF50; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📄 CSV to HTML</button></div>](/)',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '[<div style="text-align: center;"><button style="background-color: #2196F3; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📄 コミュニティコンバーター</button></div>](converter_community)',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📊 GA4/GSC AI分析</button></div>](analytics_chat)',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '[<div style="text-align: center;"><button style="background-color: #9C27B0; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">🖼️ 画像クロップ</button></div>](image_resize)',
-        unsafe_allow_html=True,
-    )
-    st.markdown("---")
+    render_dashboard_sidebar_nav()
 
 
 def _invalidate_state_cache():

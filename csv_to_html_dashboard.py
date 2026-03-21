@@ -66,6 +66,41 @@ def render_likepass_footer():
     )
 
 
+def render_dashboard_sidebar_nav(*, section_title: str = "### 🔗 ダッシュボード") -> None:
+    """
+    同一 Streamlit セッション内でページ遷移（Markdown リンクは別タブになりログインが無効化されがち）。
+    streamlit run csv_to_html_dashboard.py をエントリとした相対パス。
+    """
+    st.markdown(section_title)
+    st.markdown("---")
+    st.page_link(
+        "csv_to_html_dashboard.py",
+        label="📄 CSV to HTML コンバーター",
+        use_container_width=True,
+    )
+    st.page_link(
+        "pages/converter_community.py",
+        label="📄 コミュニティコンバーター",
+        use_container_width=True,
+    )
+    st.page_link(
+        "pages/analytics_chat.py",
+        label="📊 GA4/GSC AI分析チャット",
+        use_container_width=True,
+    )
+    st.page_link(
+        "pages/image_resize.py",
+        label="🖼️ 画像正方形クロップ",
+        use_container_width=True,
+    )
+    st.page_link(
+        "pages/article_stock.py",
+        label="📦 記事掲載商品・在庫",
+        use_container_width=True,
+    )
+    st.markdown("---")
+
+
 def login_page():
     """ログインページを表示"""
     render_page_title_with_logo("🔐 ログイン", title_element_id="login-title")
@@ -101,14 +136,9 @@ def login_page():
     st.markdown("---")
     st.info("💡 ユーザー情報は`config/users.json`で管理されています。")
     
-    # マルチページへのリンク
+    # マルチページへのリンク（同一タブ・同一セッション）
     st.markdown("---")
-    st.markdown("### 📊 その他のページ")
-    # Streamlitのマルチページ機能では、pages/analytics_chat.pyは/analytics_chatでアクセス可能
-    st.markdown('[<div style="text-align: center;"><button style="background-color: #2196F3; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📄 コミュニティコンバーター</button></div>](converter_community)', unsafe_allow_html=True)
-    st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
-    st.markdown('[<div style="text-align: center;"><button style="background-color: #9C27B0; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">🖼️ 画像正方形クロップ</button></div>](image_resize)', unsafe_allow_html=True)
-    st.markdown('[<div style="text-align: center;"><button style="background-color: #009688; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📦 記事掲載商品・在庫</button></div>](article_stock)', unsafe_allow_html=True)
+    render_dashboard_sidebar_nav(section_title="### 📊 その他のページ")
     render_likepass_footer()
 
 class CSVToHTMLConverter:
@@ -891,24 +921,9 @@ def main():
     )
     require_dashboard_login()
 
-    # サイドバーにナビゲーションを追加（ログイン後のみ）
+    # サイドバーにナビゲーションを追加（ログイン後のみ・同一セッション遷移）
     with st.sidebar:
-        st.markdown("### 🔗 ダッシュボード")
-        st.markdown("---")
-
-        # 現在のページを強調表示
-        st.markdown("**📄 CSV to HTML コンバーター**")
-        st.markdown("（現在のページ）")
-        st.markdown("")
-
-        # 他のダッシュボードへのリンク
-        # Streamlitのマルチページ機能では、pages/analytics_chat.pyは/analytics_chatでアクセス可能
-        st.markdown('[<div style="text-align: center;"><button style="background-color: #2196F3; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📄 コミュニティコンバーター</button></div>](converter_community)', unsafe_allow_html=True)
-        st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">📊 GA4/GSC AI分析チャット</button></div>](analytics_chat)', unsafe_allow_html=True)
-        st.markdown('[<div style="text-align: center;"><button style="background-color: #9C27B0; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%; margin-bottom: 0.5rem;">🖼️ 画像正方形クロップ</button></div>](image_resize)', unsafe_allow_html=True)
-        st.markdown('[<div style="text-align: center;"><button style="background-color: #009688; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📦 記事掲載商品・在庫</button></div>](article_stock)', unsafe_allow_html=True)
-
-        st.markdown("---")
+        render_dashboard_sidebar_nav()
 
     # Google Tag Manager - 親ウィンドウに動的に挿入
     gtm_script = """

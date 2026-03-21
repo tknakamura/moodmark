@@ -29,7 +29,11 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 from analytics.ai_analytics_chat import AIAnalyticsChat
-from csv_to_html_dashboard import render_likepass_footer, require_dashboard_login
+from csv_to_html_dashboard import (
+    render_dashboard_sidebar_nav,
+    render_likepass_footer,
+    require_dashboard_login,
+)
 from tools.streamlit_branding import render_page_title_with_logo
 
 # ページ設定（最初のStreamlitコマンドである必要がある）
@@ -103,21 +107,8 @@ st.markdown("---")
 
 # サイドバー設定
 with st.sidebar:
-    # ダッシュボードナビゲーション
-    st.markdown("### 🔗 ダッシュボード")
-    st.markdown("---")
-    
-    # 現在のページを強調表示
-    st.markdown("**📊 GA4/GSC AI分析チャット**")
-    st.markdown("（現在のページ）")
-    st.markdown("")
-    
-    # 他のダッシュボードへのリンク
-    # Streamlitのマルチページ機能では、メインページは/でアクセス可能
-    st.markdown('[<div style="text-align: center;"><button style="background-color: #FF4B4B; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; width: 100%;">📄 CSV to HTML コンバーター</button></div>](/)', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
+    render_dashboard_sidebar_nav()
+
     st.header("⚙️ 設定")
     
     # サイト選択
