@@ -513,10 +513,41 @@ with tab_run:
             help="すべて選択＝従来どおり全記事が対象。一部だけ選ぶと部分チェックになります。",
         )
         st.write(f"登録記事: **{len(article_url_options)}** 件 / 今回チェック: **{len(selected_urls)}** 件")
-        if st.button("実行", type="primary", key="ams_run"):
-            if not selected_urls:
-                st.warning("1件以上選んでください。")
+
+        if "ams_run_result" in st.session_state:
+            _res = st.session_state.pop("ams_run_result")
+            if not _res.get("ok"):
+                st.error(_res.get("error") or "実行エラー")
             else:
+                if _res.get("info_text"):
+                    st.info(_res["info_text"])
+                _warns = _res.get("warnings") or []
+                if _warns:
+                    st.warning("警告（記事ごと）:")
+                    for x in _warns:
+                        st.write(
+                            f"- `{x.get('article_url', '')}`: {x.get('message', '')}"
+                        )
+                if _res.get("success_text"):
+                    st.success(_res["success_text"])
+                if _res.get("balloons"):
+                    st.balloons()
+
+        run_pending = bool(st.session_state.get("ams_run_pending"))
+        run_clicked = st.button(
+            "実行",
+            type="primary",
+            key="ams_run",
+            disabled=run_pending,
+            help="実行中は再度押せません。完了までお待ちください。"
+            if run_pending
+            else None,
+        )
+
+        if run_pending:
+            st.info("在庫チェックを実行しています…（完了までこのタブを開いたままにしてください）")
+            _run_result = None
+            try:
                 arts_now = get_store().load_state().get("articles") or []
                 prev_snap = get_store().load_state().get("last_snapshot")
                 all_set = set(article_url_options)
@@ -532,7 +563,7 @@ with tab_run:
                         prog.progress(min(1.0, (cur + 1) / max(tot, 1)))
                     status.text(msg[-120:] if msg else "")
 
-                try:
+                with st.spinner("記事・商品を取得しています…"):
                     snap = run_stock_check(
                         arts_now,
                         request_delay_s=delay,
@@ -544,38 +575,50 @@ with tab_run:
                         progress_callback=cb,
                         only_check_article_urls=only_urls,
                     )
-                except Exception as e:
-                    st.error(f"実行エラー: {e}")
-                else:
-                    if fetch_ga4_commerce:
-                        with st.spinner(
-                            "GA4から商品の itemName・購入数・収益を取得中…"
-                        ):
-                            _enrich_snapshot_rows_ga4_commerce(snap)
-                    get_store().record_snapshot(snap)
-                    _invalidate_state_cache()
-                    prog.progress(1.0)
-                    status.text("完了")
-                    rs = snap.get("run_stats") or {}
-                    extra = ""
-                    if rs.get("articles_preserved_without_fetch"):
-                        extra = (
-                            f" ・ 前回結果を維持した記事 {rs.get('articles_preserved_without_fetch', 0)} 件"
-                        )
-                    st.info(
-                        f"記事: 新規取得 {rs.get('articles_fetched', 0)} / キャッシュ利用 {rs.get('articles_cached', 0)}"
-                        f"{extra} ・ "
-                        f"商品: 新規取得 {rs.get('products_fetched', 0)} / キャッシュ利用 {rs.get('products_cached', 0)}"
+                if fetch_ga4_commerce:
+                    with st.spinner(
+                        "GA4から商品の itemName・購入数・収益を取得中…"
+                    ):
+                        _enrich_snapshot_rows_ga4_commerce(snap)
+                get_store().record_snapshot(snap)
+                _invalidate_state_cache()
+                prog.progress(1.0)
+                status.text("完了")
+                rs = snap.get("run_stats") or {}
+                extra = ""
+                if rs.get("articles_preserved_without_fetch"):
+                    extra = (
+                        f" ・ 前回結果を維持した記事 {rs.get('articles_preserved_without_fetch', 0)} 件"
                     )
-                    w = snap.get("article_warnings") or []
-                    if w:
-                        st.warning("警告（記事ごと）:")
-                        for x in w:
-                            st.write(f"- `{x.get('article_url')}`: {x.get('message')}")
-                    st.success(
-                        f"完了: 商品 {len(snap.get('rows') or [])} 件（実行時刻: {snap.get('run_at', '')}）"
-                    )
-                    st.balloons()
+                info_text = (
+                    f"記事: 新規取得 {rs.get('articles_fetched', 0)} / キャッシュ利用 {rs.get('articles_cached', 0)}"
+                    f"{extra} ・ "
+                    f"商品: 新規取得 {rs.get('products_fetched', 0)} / キャッシュ利用 {rs.get('products_cached', 0)}"
+                )
+                w = snap.get("article_warnings") or []
+                success_text = (
+                    f"完了: 商品 {len(snap.get('rows') or [])} 件（実行時刻: {snap.get('run_at', '')}）"
+                )
+                _run_result = {
+                    "ok": True,
+                    "info_text": info_text,
+                    "warnings": list(w),
+                    "success_text": success_text,
+                    "balloons": True,
+                }
+            except Exception as e:
+                logger.exception("在庫チェック実行エラー")
+                _run_result = {"ok": False, "error": f"実行エラー: {e}"}
+            finally:
+                st.session_state.ams_run_pending = False
+            st.session_state.ams_run_result = _run_result
+            st.rerun()
+        elif run_clicked:
+            if not selected_urls:
+                st.warning("1件以上選んでください。")
+            else:
+                st.session_state.ams_run_pending = True
+                st.rerun()
 
 with tab_view:
     state = _get_state()
