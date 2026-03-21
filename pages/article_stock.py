@@ -514,35 +514,16 @@ with tab_run:
         )
         st.write(f"登録記事: **{len(article_url_options)}** 件 / 今回チェック: **{len(selected_urls)}** 件")
 
-        if "ams_run_result" in st.session_state:
-            _res = st.session_state.pop("ams_run_result")
-            if not _res.get("ok"):
-                st.error(_res.get("error") or "実行エラー")
-            else:
-                if _res.get("info_text"):
-                    st.info(_res["info_text"])
-                _warns = _res.get("warnings") or []
-                if _warns:
-                    st.warning("警告（記事ごと）:")
-                    for x in _warns:
-                        st.write(
-                            f"- `{x.get('article_url', '')}`: {x.get('message', '')}"
-                        )
-                if _res.get("success_text"):
-                    st.success(_res["success_text"])
-                if _res.get("balloons"):
-                    st.balloons()
-
         run_pending = bool(st.session_state.get("ams_run_pending"))
-        run_clicked = st.button(
-            "実行",
-            type="primary",
-            key="ams_run",
-            disabled=run_pending,
-            help="実行中は再度押せません。完了までお待ちください。"
-            if run_pending
-            else None,
-        )
+        _run_btn_kwargs: dict = {
+            "label": "実行",
+            "type": "primary",
+            "key": "ams_run",
+            "disabled": run_pending,
+        }
+        if run_pending:
+            _run_btn_kwargs["help"] = "実行中は再度押せません。完了までお待ちください。"
+        run_clicked = st.button(**_run_btn_kwargs)
 
         if run_pending:
             st.info("在庫チェックを実行しています…（完了までこのタブを開いたままにしてください）")
@@ -563,18 +544,18 @@ with tab_run:
                         prog.progress(min(1.0, (cur + 1) / max(tot, 1)))
                     status.text(msg[-120:] if msg else "")
 
-                with st.spinner("記事・商品を取得しています…"):
-                    snap = run_stock_check(
-                        arts_now,
-                        request_delay_s=delay,
-                        max_article_workers=int(w_art),
-                        max_product_workers=int(w_prd),
-                        previous_snapshot=prev_snap,
-                        cache_ttl_hours=float(ttl_h),
-                        force_full_refresh=force_full,
-                        progress_callback=cb,
-                        only_check_article_urls=only_urls,
-                    )
+                # st.spinner で囲むと progress_callback の更新が長時間画面に出ないことがあるため使わない
+                snap = run_stock_check(
+                    arts_now,
+                    request_delay_s=delay,
+                    max_article_workers=int(w_art),
+                    max_product_workers=int(w_prd),
+                    previous_snapshot=prev_snap,
+                    cache_ttl_hours=float(ttl_h),
+                    force_full_refresh=force_full,
+                    progress_callback=cb,
+                    only_check_article_urls=only_urls,
+                )
                 if fetch_ga4_commerce:
                     with st.spinner(
                         "GA4から商品の itemName・購入数・収益を取得中…"
@@ -619,6 +600,26 @@ with tab_run:
             else:
                 st.session_state.ams_run_pending = True
                 st.rerun()
+
+        # ボタンより上に可変個の要素を挟まない（ウィジェット順の安定化）
+        if "ams_run_result" in st.session_state:
+            _res = st.session_state.pop("ams_run_result")
+            if not _res.get("ok"):
+                st.error(_res.get("error") or "実行エラー")
+            else:
+                if _res.get("info_text"):
+                    st.info(_res["info_text"])
+                _warns = _res.get("warnings") or []
+                if _warns:
+                    st.warning("警告（記事ごと）:")
+                    for x in _warns:
+                        st.write(
+                            f"- `{x.get('article_url', '')}`: {x.get('message', '')}"
+                        )
+                if _res.get("success_text"):
+                    st.success(_res["success_text"])
+                if _res.get("balloons"):
+                    st.balloons()
 
 with tab_view:
     state = _get_state()
