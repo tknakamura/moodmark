@@ -29,6 +29,11 @@ from tools.moodmark_stock.scraper import (
     run_stock_check,
 )
 from tools.moodmark_stock import state as moodmark_state
+from tools.moodmark_stock.snapshot_display import (
+    filter_article_to_products_by_registration,
+    rehydrate_article_labels_in_df,
+    registered_article_urls,
+)
 from tools.moodmark_stock.store import get_store
 
 logger = logging.getLogger(__name__)
@@ -330,8 +335,6 @@ else:
         "PostgreSQL を使う場合は環境変数 **`DATABASE_URL`** を設定してください（Render でDBとWebを紐づけ）。"
     )
 
-state = _get_state()
-
 # タブを横幅均等・切り替えやすく
 st.markdown(
     """
@@ -580,6 +583,13 @@ with tab_view:
     if not snap:
         st.info("まだ実行されていません。「在庫チェック実行」タブから実行してください。")
     else:
+        articles_list = state.get("articles") or []
+        reg_urls = registered_article_urls(articles_list)
+        atp_full = snap.get("article_to_products") or {}
+        article_to_products = filter_article_to_products_by_registration(
+            atp_full, reg_urls
+        )
+
         st.subheader("サマリ")
         st.caption(f"最終実行（UTC）: `{snap.get('run_at', '')}`")
         rows = snap.get("rows") or []
@@ -588,6 +598,7 @@ with tab_view:
         else:
             df = pd.DataFrame(rows)
             df = _ensure_product_display_and_ga4_columns(df)
+            df = rehydrate_article_labels_in_df(df, articles_list)
             order_front = ["product_url", "product_name_display"]
             order_ga4 = ["ga4_items_purchased", "ga4_item_revenue"]
             order_mid = [
@@ -607,8 +618,7 @@ with tab_view:
             df["_oos"] = df["stock_status"].apply(lambda x: x != "in_stock")
             df["article_count"] = df["article_urls"].apply(_count_articles_from_urls)
 
-            atp = snap.get("article_to_products") or {}
-            total_slots = sum(len(plist) for plist in atp.values())
+            total_slots = sum(len(plist) for plist in article_to_products.values())
             slots_unknown = total_slots == 0 and len(df) > 0
 
             k1, k2, k3, k4, k5 = st.columns(5)
@@ -638,7 +648,6 @@ with tab_view:
                 " 期間の終端は本日から3日前、そこからさかのぼる7日間（処理遅延を避けるため）。"
                 " 記事の登録・更新時に取得します。"
             )
-            article_to_products = snap.get("article_to_products") or {}
             product_stock = snap.get("product_stock") or {}
             summary_rows = []
             for aurl, plist in article_to_products.items():
