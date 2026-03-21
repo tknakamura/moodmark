@@ -12,6 +12,8 @@ Streamlit ダッシュボードのページ **`/article_stock`**（[pages/articl
 
 ロジックは [tools/moodmark_stock/scraper.py](../tools/moodmark_stock/scraper.py) に集約。
 
+- **記事からの商品URL抽出**: `/moodmark/product/MM-…`（および `MMV-…`）の `href` に加え、**moodmarkgift（IDEA）** 記事で使われる `data-moodmark-product-id="…"` も検出します。在庫チェック用の取得先はいずれも `https://isetan.mistore.jp/moodmark/product/{slug}.html` に正規化されます（静的HTMLに ID が含まれる限り、ヘッドレスは不要なケースが多いです）。
+
 ## データの保存（PostgreSQL 推奨）
 
 永続層は [tools/moodmark_stock/store.py](../tools/moodmark_stock/store.py) が担当します。

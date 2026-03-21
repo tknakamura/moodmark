@@ -41,6 +41,11 @@ ABS_PRODUCT_RE = re.compile(
     rf"https://isetan\.mistore\.jp/moodmark/product/({_PRODUCT_SLUG})\.html",
     re.IGNORECASE,
 )
+# moodmarkgift（IDEA）記事など: href ではなく data 属性で商品IDのみ載せるケース
+DATA_MOODMARK_PRODUCT_ID_RE = re.compile(
+    rf'data-moodmark-product-id\s*=\s*["\']({_PRODUCT_SLUG})["\']',
+    re.IGNORECASE,
+)
 
 
 def canonical_product_url(url_or_path: str) -> Optional[str]:
@@ -78,6 +83,11 @@ def product_slug_for_ga4_item_id(url_or_path: str) -> Optional[str]:
 
 
 def extract_product_urls_from_html(html: str, base_url: str = "") -> List[str]:
+    """
+    記事HTMLから商品 canonical URL 一覧を返す。
+    - /moodmark/product/*.html のリンク
+    - data-moodmark-product-id（moodmarkgift 記事で使用）から組み立てた同一 canonical
+    """
     seen: set = set()
     out: List[str] = []
 
@@ -98,6 +108,10 @@ def extract_product_urls_from_html(html: str, base_url: str = "") -> List[str]:
             add(urljoin(base_url, path))
         else:
             add(f"https://isetan.mistore.jp{path}")
+
+    for m in DATA_MOODMARK_PRODUCT_ID_RE.finditer(html or ""):
+        slug = m.group(1)
+        add(f"https://isetan.mistore.jp/moodmark/product/{slug}.html")
 
     return out
 
