@@ -5,8 +5,11 @@
 """
 
 import html as html_escape
+import logging
 import os
 import sys
+from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import pandas as pd
 import streamlit.components.v1 as components
@@ -23,8 +26,10 @@ from csv_to_html_dashboard import (
 )
 
 from tools.moodmark_stock.scraper import run_stock_check
-from tools.moodmark_stock.state import import_state_json
+from tools.moodmark_stock import state as moodmark_state
 from tools.moodmark_stock.store import get_store
+
+logger = logging.getLogger(__name__)
 
 RESULT_TABLE_HEADERS = {
     "product_url": "商品ページ",
@@ -161,6 +166,33 @@ def _get_state():
     return st.session_state.ams_state
 
 
+def _sync_article_ga4_pageviews(store, article_id: str, article_url: str) -> None:
+    try:
+        from analytics.google_apis_integration import GoogleAPIsIntegration
+    except ImportError:
+        logger.warning("GoogleAPIsIntegration をインポートできません")
+        return
+    api = GoogleAPIsIntegration()
+    if not api.ga4_service or not api.ga4_property_id:
+        return
+    path = (urlparse(article_url).path or "").strip() or "/"
+    fetched_at = datetime.now(timezone.utc)
+    try:
+        pv = api.get_screen_page_views_for_path(path)
+        store.set_article_ga4_pageviews(
+            article_id,
+            fetched_at,
+            pageviews=pv,
+        )
+    except Exception as e:
+        logger.warning("記事GA4 PV取得エラー (%s): %s", article_url, e)
+        store.set_article_ga4_pageviews(
+            article_id,
+            fetched_at,
+            error=str(e)[:512],
+        )
+
+
 st.title("📦 記事掲載商品の在庫")
 st.caption("登録した特集記事から商品URLを抽出し、在庫状態をまとめて表示します。")
 
@@ -212,6 +244,16 @@ with tab_manage:
             st.error(err)
         else:
             _invalidate_state_cache()
+            nu = moodmark_state._normalize_article_url(new_url)
+            fresh = get_store().load_state()
+            art = next(
+                (a for a in fresh.get("articles", []) if a.get("url") == nu),
+                None,
+            )
+            if art:
+                with st.spinner("GA4から表示回数を取得中…"):
+                    _sync_article_ga4_pageviews(store, art["id"], art["url"])
+            _invalidate_state_cache()
             st.success("追加しました")
             st.rerun()
 
@@ -220,8 +262,13 @@ with tab_manage:
     if not arts:
         st.warning("記事が未登録です。上でURLを追加してください。")
     else:
+        df_reg = pd.DataFrame(arts)
+        reg_cols = ["label", "url", "id"]
+        for c in ("ga4_pageviews_7d", "ga4_pv_fetched_at"):
+            if c in df_reg.columns:
+                reg_cols.append(c)
         st.dataframe(
-            pd.DataFrame(arts)[["label", "url", "id"]],
+            df_reg[[c for c in reg_cols if c in df_reg.columns]],
             use_container_width=True,
             hide_index=True,
         )
@@ -238,6 +285,17 @@ with tab_manage:
                 if err:
                     st.error(err)
                 else:
+                    _invalidate_state_cache()
+                    fresh = get_store().load_state()
+                    art = next(
+                        (a for a in fresh.get("articles", []) if a.get("id") == aid),
+                        None,
+                    )
+                    if art:
+                        with st.spinner("GA4から表示回数を取得中…"):
+                            _sync_article_ga4_pageviews(
+                                store, aid, art.get("url", "")
+                            )
                     _invalidate_state_cache()
                     st.success("更新しました")
                     st.rerun()
@@ -390,6 +448,11 @@ with tab_view:
                 "掲載リンク数は当該記事内の商品URL数です。"
                 " 記事間の合計はユニークSKU数と一致しません（同一商品の複数掲載など）。"
             )
+            st.caption(
+                "PV(7日): GA4の画面表示回数（screenPageViews）。"
+                " 期間の終端は本日から3日前、そこからさかのぼる7日間（処理遅延を避けるため）。"
+                " 記事の登録・更新時に取得します。"
+            )
             article_to_products = snap.get("article_to_products") or {}
             product_stock = snap.get("product_stock") or {}
             summary_rows = []
@@ -405,8 +468,20 @@ with tab_view:
                     for p in plist
                     if product_stock.get(p, {}).get("status") != "in_stock"
                 )
+                pv7 = None
+                if art is not None and art.get("ga4_pageviews_7d") is not None:
+                    try:
+                        pv7 = int(art["ga4_pageviews_7d"])
+                    except (TypeError, ValueError):
+                        pv7 = None
                 summary_rows.append(
-                    {"記事": label, "掲載数": n, "在庫注意": bad, "article_url": aurl}
+                    {
+                        "記事": label,
+                        "掲載数": n,
+                        "在庫注意": bad,
+                        "article_url": aurl,
+                        "PV(7日)": pv7,
+                    }
                 )
             if not summary_rows:
                 st.info("記事別の集計データがありません。")
@@ -420,6 +495,7 @@ with tab_view:
                     u = str(r.get("article_url") or "").strip()
                     if u and not u.startswith(("http://", "https://")):
                         u = "https://" + u.lstrip("/")
+                    pv_cell = r.get("PV(7日)")
                     table_rows.append(
                         {
                             "記事": r["記事"],
@@ -427,6 +503,7 @@ with tab_view:
                             "在庫あり": ok,
                             "在庫注意": bad,
                             "在庫注意率": rate,
+                            "PV(7日)": pv_cell,
                             "記事URL": u,
                         }
                     )
@@ -454,6 +531,11 @@ with tab_view:
                             "在庫注意",
                             format="%d",
                             help="入荷待ち・SOLD OUT・取得エラー等",
+                        ),
+                        "PV(7日)": st.column_config.NumberColumn(
+                            "PV(7日)",
+                            format="%d",
+                            help="GA4 screenPageViews（終端3日前から遡る7日間）。未取得は空欄。",
                         ),
                     },
                     hide_index=True,
@@ -524,7 +606,7 @@ with tab_backup:
     up = st.file_uploader("article_stock_state.json", type=["json"])
     if up is not None:
         raw = up.read().decode("utf-8", errors="replace")
-        data, err = import_state_json(raw)
+        data, err = moodmark_state.import_state_json(raw)
         if err:
             st.error(err)
         else:

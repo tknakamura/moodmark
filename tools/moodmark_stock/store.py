@@ -22,6 +22,29 @@ from tools.moodmark_stock import state as state_mod
 STATE_VERSION = state_mod.STATE_VERSION
 
 
+def _optional_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
 def _normalize_database_url(url: str) -> str:
     if url.startswith("postgres://"):
         return url.replace("postgres://", "postgresql+psycopg2://", 1)
@@ -42,6 +65,9 @@ class MoodmarkStockArticleRow(Base):
     label = mapped_column(String(512), nullable=False)
     created_at = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at = mapped_column(DateTime(timezone=True), nullable=False)
+    ga4_pageviews_7d = mapped_column(Integer, nullable=True)
+    ga4_pv_fetched_at = mapped_column(DateTime(timezone=True), nullable=True)
+    ga4_pv_error = mapped_column(String(512), nullable=True)
 
 
 class MoodmarkStockRunRow(Base):
@@ -73,6 +99,17 @@ class ArticleStockStore(ABC):
         label: Optional[str] = None,
     ) -> Optional[str]:
         pass
+
+    @abstractmethod
+    def set_article_ga4_pageviews(
+        self,
+        article_id: str,
+        fetched_at: datetime,
+        *,
+        pageviews: Optional[int] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        """成功時は pageviews を渡し error は None。失敗時は error のみ（既存 PV は維持）。"""
 
     @abstractmethod
     def record_snapshot(self, snapshot: Dict[str, Any]) -> None:
@@ -127,6 +164,29 @@ class JsonArticleStockStore(ArticleStockStore):
         state_mod.save_state(s, self._path)
         return None
 
+    def set_article_ga4_pageviews(
+        self,
+        article_id: str,
+        fetched_at: datetime,
+        *,
+        pageviews: Optional[int] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        s = self.load_state()
+        for a in s.get("articles", []):
+            if a.get("id") != article_id:
+                continue
+            a["ga4_pv_fetched_at"] = fetched_at.isoformat()
+            if pageviews is not None:
+                a["ga4_pageviews_7d"] = int(pageviews)
+                a.pop("ga4_pv_error", None)
+            elif error:
+                err = (error or "")[:512]
+                if err:
+                    a["ga4_pv_error"] = err
+            state_mod.save_state(s, self._path)
+            return
+
     def record_snapshot(self, snapshot: Dict[str, Any]) -> None:
         s = self.load_state()
         state_mod.attach_snapshot(s, snapshot)
@@ -166,9 +226,20 @@ class PostgresArticleStockStore(ArticleStockStore):
                     MoodmarkStockArticleRow.created_at
                 )
             ).all()
-            articles: List[Dict[str, Any]] = [
-                {"id": r.id, "url": r.url, "label": r.label} for r in rows
-            ]
+            articles: List[Dict[str, Any]] = []
+            for r in rows:
+                ad: Dict[str, Any] = {
+                    "id": r.id,
+                    "url": r.url,
+                    "label": r.label,
+                }
+                if r.ga4_pageviews_7d is not None:
+                    ad["ga4_pageviews_7d"] = int(r.ga4_pageviews_7d)
+                if r.ga4_pv_fetched_at is not None:
+                    ad["ga4_pv_fetched_at"] = r.ga4_pv_fetched_at.isoformat()
+                if r.ga4_pv_error:
+                    ad["ga4_pv_error"] = r.ga4_pv_error
+                articles.append(ad)
             last_run = sess.scalars(
                 select(MoodmarkStockRunRow).order_by(MoodmarkStockRunRow.run_at.desc())
             ).first()
@@ -207,6 +278,26 @@ class PostgresArticleStockStore(ArticleStockStore):
             )
             sess.commit()
         return None
+
+    def set_article_ga4_pageviews(
+        self,
+        article_id: str,
+        fetched_at: datetime,
+        *,
+        pageviews: Optional[int] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        with self._session() as sess:
+            row = sess.get(MoodmarkStockArticleRow, article_id)
+            if not row:
+                return
+            row.ga4_pv_fetched_at = fetched_at
+            if pageviews is not None:
+                row.ga4_pageviews_7d = int(pageviews)
+                row.ga4_pv_error = None
+            elif error:
+                row.ga4_pv_error = (error or "")[:512] or None
+            sess.commit()
 
     def remove_article(self, article_id: str) -> None:
         with self._session() as sess:
@@ -281,6 +372,11 @@ class PostgresArticleStockStore(ArticleStockStore):
                     if not u or u in seen_urls:
                         continue
                     seen_urls.add(u)
+                    gpv = _optional_int(a.get("ga4_pageviews_7d"))
+                    gfp = _parse_iso_datetime(a.get("ga4_pv_fetched_at"))
+                    gerr = (a.get("ga4_pv_error") or "").strip() or None
+                    if gerr:
+                        gerr = gerr[:512]
                     sess.add(
                         MoodmarkStockArticleRow(
                             id=str(aid)[:36],
@@ -288,6 +384,9 @@ class PostgresArticleStockStore(ArticleStockStore):
                             label=(a.get("label") or "").strip() or u,
                             created_at=now,
                             updated_at=now,
+                            ga4_pageviews_7d=gpv,
+                            ga4_pv_fetched_at=gfp,
+                            ga4_pv_error=gerr,
                         )
                     )
                 sess.commit()

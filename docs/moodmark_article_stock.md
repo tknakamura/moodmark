@@ -21,6 +21,27 @@ Streamlit ダッシュボードのページ **`/article_stock`**（[pages/articl
 | 環境変数 **`DATABASE_URL` が設定されている** | **PostgreSQL**。記事はテーブル `moodmark_stock_articles`、各実行結果は `moodmark_stock_runs`（JSONB）に追記。画面は**最新1件の実行**を表示。 |
 | 未設定 | **JSON ファイル**（既定 `data/article_stock_state.json` または `MOODMARK_STOCK_STATE_PATH`）。 |
 
+#### 既存 PostgreSQL へのカラム追加（GA4 表示回数）
+
+`create_all` だけでは既存テーブルに列が増えないため、**すでに `moodmark_stock_articles` がある環境**では次を一度実行してください（新規作成の DB では不要なことが多いです）。
+
+```sql
+ALTER TABLE moodmark_stock_articles
+  ADD COLUMN IF NOT EXISTS ga4_pageviews_7d INTEGER;
+ALTER TABLE moodmark_stock_articles
+  ADD COLUMN IF NOT EXISTS ga4_pv_fetched_at TIMESTAMPTZ;
+ALTER TABLE moodmark_stock_articles
+  ADD COLUMN IF NOT EXISTS ga4_pv_error VARCHAR(512);
+```
+
+### GA4 の記事 PV（ダッシュボード）
+
+記事の登録・URL 更新直後に、GA4 Data API で **screenPageViews** を取得し、記事別サマリに **PV(7日)** として表示します。
+
+- **環境変数**: `GA4_PROPERTY_ID`、および既存の Google 認証（`GOOGLE_CREDENTIALS_JSON` または `GOOGLE_CREDENTIALS_FILE`）。未設定時は取得をスキップし、列は「未設定」扱いです。
+- **集計期間**: 反映遅延を避けるため、**終端＝今日から3日前**、そこから **さかのぼる7日間**（両端含む）。
+- **突合**: 記事 URL から `pagePath` を取り、GA4 の `pagePath` に **CONTAINS** でフィルタ（`/moodmark`・`/moodmarkgift` 配下ではサイト用 **BEGINS_WITH** と AND）。
+
 ### Render
 
 [render.yaml](../render.yaml) では Web サービス用 PostgreSQL（`moodmark-article-stock`）と `DATABASE_URL` の自動連携を定義しています。Blueprint を初めて適用する場合、ダッシュボードでサービスとDBの作成・紐づけを確認してください。

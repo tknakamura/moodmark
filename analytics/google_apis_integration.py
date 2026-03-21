@@ -10,7 +10,7 @@ import os
 import json
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -1015,6 +1015,119 @@ class GoogleAPIsIntegration:
                 'page_url': page_url,
                 'error': f'データ取得エラー: {error_msg}'
             }
+
+    @staticmethod
+    def _ga4_page_path_site_prefix(page_path: str) -> Optional[str]:
+        """Reduce cross-site noise when filtering by path (moodmarkgift before moodmark)."""
+        p = page_path or ""
+        if p.startswith("/moodmarkgift"):
+            return "/moodmarkgift"
+        if p.startswith("/moodmark"):
+            return "/moodmark"
+        return None
+
+    @staticmethod
+    def _screen_page_views_from_run_report_response(response: Dict[str, Any]) -> int:
+        if "totals" in response and response["totals"]:
+            mv = response["totals"][0].get("metricValues") or []
+            if mv:
+                try:
+                    return int(float(mv[0].get("value", 0)))
+                except (TypeError, ValueError):
+                    return 0
+        rows = response.get("rows") or []
+        if rows:
+            mv = rows[0].get("metricValues") or []
+            if mv:
+                try:
+                    return int(float(mv[0].get("value", 0)))
+                except (TypeError, ValueError):
+                    return 0
+        return 0
+
+    def get_screen_page_views_for_path(
+        self,
+        page_path: str,
+        *,
+        lag_days: int = 3,
+        window_days: int = 7,
+    ) -> int:
+        """
+        GA4 の screenPageViews 合計を、単一 pagePath 向けに軽量取得する。
+
+        期間: カレンダー基準で end = 今日 - lag_days、start = end - (window_days - 1)（両端含む）。
+
+        Args:
+            page_path: 先頭スラッシュ付きのパス（例: /moodmark/foo）
+            lag_days: 終端日を今日から何日前にするか（既定 3＝処理遅延回避）
+            window_days: 集計日数（既定 7）
+
+        Returns:
+            合計 PV（int）。データ0件なら 0。
+
+        Raises:
+            RuntimeError: GA4 未設定時
+            HttpError: API エラー時
+        """
+        if not self.ga4_service or not self.ga4_property_id:
+            raise RuntimeError("GA4サービスまたはプロパティIDが設定されていません")
+        path = (page_path or "").strip() or "/"
+        end_d = datetime.now().date() - timedelta(days=int(lag_days))
+        start_d = end_d - timedelta(days=int(window_days) - 1)
+        start_str = start_d.strftime("%Y-%m-%d")
+        end_str = end_d.strftime("%Y-%m-%d")
+
+        contains_expr = {
+            "filter": {
+                "fieldName": "pagePath",
+                "stringFilter": {
+                    "matchType": "CONTAINS",
+                    "value": path,
+                    "caseSensitive": False,
+                },
+            }
+        }
+        prefix = self._ga4_page_path_site_prefix(path)
+        if prefix:
+            prefix_expr = {
+                "filter": {
+                    "fieldName": "pagePath",
+                    "stringFilter": {
+                        "matchType": "BEGINS_WITH",
+                        "value": prefix,
+                        "caseSensitive": False,
+                    },
+                }
+            }
+            dimension_filter = {
+                "andGroup": {"expressions": [prefix_expr, contains_expr]}
+            }
+        else:
+            dimension_filter = contains_expr
+
+        request_body = {
+            "dateRanges": [{"startDate": start_str, "endDate": end_str}],
+            "metrics": [{"name": "screenPageViews"}],
+            "dimensionFilter": dimension_filter,
+        }
+
+        logger.info(
+            "GA4 runReport (pagePath PV): path=%r, %s〜%s",
+            path,
+            start_str,
+            end_str,
+        )
+        response = (
+            self.ga4_service.properties()
+            .runReport(
+                property=f"properties/{self.ga4_property_id}",
+                body=request_body,
+            )
+            .execute()
+        )
+        total = self._screen_page_views_from_run_report_response(response)
+        logger.info("GA4 pagePath PV 合計: %s (path=%r)", total, path)
+        return total
     
     def get_gsc_data(self, date_range_days=30, dimensions=None, row_limit=25000, site_name='moodmark'):
         """
