@@ -809,12 +809,37 @@ with tab_view:
                 value=False,
                 help="掲載記事数が2以上のSKUに絞り込みます。",
             )
-            art_search = st.text_input(
-                "記事検索（部分一致）",
-                value="",
-                placeholder="記事ラベル / URL の一部で絞り込み",
-                key="ams_article_filter_search",
-            ).strip()
+            if "ams_article_search_applied" not in st.session_state:
+                st.session_state.ams_article_search_applied = ""
+
+            with st.form("ams_article_search_form", clear_on_submit=False):
+                st.text_input(
+                    "記事検索（部分一致）",
+                    placeholder="記事ラベル / URL の一部",
+                    key="ams_article_search_draft",
+                    help="入力後「検索を適用」で一覧と下の記事リストを絞り込みます（キー入力のたびに自動では動きません）。",
+                )
+                fc1, fc2 = st.columns(2)
+                with fc1:
+                    search_apply = st.form_submit_button(
+                        "検索を適用", type="primary"
+                    )
+                with fc2:
+                    search_clear = st.form_submit_button("クリア")
+
+            if search_clear:
+                st.session_state.ams_article_search_applied = ""
+                if "ams_article_search_draft" in st.session_state:
+                    del st.session_state.ams_article_search_draft
+                st.rerun()
+            if search_apply:
+                st.session_state.ams_article_search_applied = (
+                    st.session_state.get("ams_article_search_draft") or ""
+                ).strip()
+
+            art_search = (st.session_state.get("ams_article_search_applied") or "").strip()
+            if art_search:
+                st.caption(f"記事検索（適用中）: 「{art_search}」")
             article_options_all = state.get("articles", []) or []
             if art_search:
                 q = art_search.lower()
@@ -843,6 +868,14 @@ with tab_view:
             if multi_article_only:
                 view = view[view["article_count"] >= 2]
             view = view.drop(columns=["_oos"], errors="ignore")
+            if art_search:
+                q = art_search.lower()
+                labels = view["article_labels"].fillna("").astype(str).str.lower()
+                urls = view["article_urls"].fillna("").astype(str).str.lower()
+                view = view[
+                    labels.str.contains(q, na=False, regex=False)
+                    | urls.str.contains(q, na=False, regex=False)
+                ]
             if art_filter != "（すべて）":
                 art = next(
                     (
