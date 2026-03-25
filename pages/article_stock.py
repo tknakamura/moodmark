@@ -809,11 +809,32 @@ with tab_view:
                 value=False,
                 help="掲載記事数が2以上のSKUに絞り込みます。",
             )
-            art_filter = st.selectbox(
-                "記事で絞り込み",
-                ["（すべて）"]
-                + [a.get("label") or a.get("url") for a in state.get("articles", [])],
-            )
+            art_search = st.text_input(
+                "記事検索（部分一致）",
+                value="",
+                placeholder="記事ラベル / URL の一部で絞り込み",
+                key="ams_article_filter_search",
+            ).strip()
+            article_options_all = state.get("articles", []) or []
+            if art_search:
+                q = art_search.lower()
+                article_options_filtered = [
+                    a
+                    for a in article_options_all
+                    if q in str(a.get("label") or "").lower()
+                    or q in str(a.get("url") or "").lower()
+                ]
+            else:
+                article_options_filtered = article_options_all
+            if article_options_filtered:
+                art_filter = st.selectbox(
+                    "記事で絞り込み",
+                    ["（すべて）"]
+                    + [a.get("label") or a.get("url") for a in article_options_filtered],
+                )
+            else:
+                st.info("検索条件に一致する記事がありません。")
+                art_filter = "（すべて）"
             view = df.copy()
             if show == "在庫注意のみ":
                 view = view[view["_oos"]]
