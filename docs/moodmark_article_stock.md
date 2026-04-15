@@ -14,6 +14,11 @@ Streamlit ダッシュボードのページ **`/article_stock`**（[pages/articl
 
 - **記事からの商品URL抽出**: `/moodmark/product/MM-…`（および `MMV-…`）の `href` に加え、**moodmarkgift（IDEA）** 記事で使われる `data-moodmark-product-id="…"` も検出します。在庫チェック用の取得先はいずれも `https://isetan.mistore.jp/moodmark/product/{slug}.html` に正規化されます（静的HTMLに ID が含まれる限り、ヘッドレスは不要なケースが多いです）。
 
+## ダッシュボードUI（記事管理・在庫実行）
+
+- **記事URLの管理**: 「編集・削除する記事を選択」で記事を切り替えると、下の **URL・ラベル** はその記事の内容に連動して表示されます（記事IDごとに入力状態が保持されます）。
+- **在庫チェック実行**: 「在庫チェックする記事」の上の **記事候補の検索** で、ラベルまたは URL の**部分一致**（大文字小文字は区別しない）により候補を絞り込めます。候補に出ていない記事はその時点では選べません。全記事を候補に戻すときは検索を空にしてください。候補や検索語を変えたとき、選択内容がリセットされることがあります。
+
 ## データの保存（PostgreSQL 推奨）
 
 永続層は [tools/moodmark_stock/store.py](../tools/moodmark_stock/store.py) が担当します。

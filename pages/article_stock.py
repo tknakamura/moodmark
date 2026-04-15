@@ -404,11 +404,24 @@ with tab_manage:
             hide_index=True,
         )
         opts = {f"{a.get('label') or a.get('url')} ({a.get('id')})": a["id"] for a in arts}
-        pick = st.selectbox("編集・削除する記事を選択", list(opts.keys()))
+        pick = st.selectbox(
+            "編集・削除する記事を選択",
+            list(opts.keys()),
+            key="ams_edit_pick",
+        )
         aid = opts[pick]
         cur = next(x for x in arts if x["id"] == aid)
-        eu = st.text_input("URL", value=cur.get("url", ""), key="ams_edit_url")
-        el = st.text_input("ラベル", value=cur.get("label", ""), key="ams_edit_label")
+        _aid_key = str(aid).replace("/", "_")
+        eu = st.text_input(
+            "URL",
+            value=cur.get("url", ""),
+            key=f"ams_edit_url_{_aid_key}",
+        )
+        el = st.text_input(
+            "ラベル",
+            value=cur.get("label", ""),
+            key=f"ams_edit_label_{_aid_key}",
+        )
         c1, c2 = st.columns(2)
         with c1:
             if st.button("更新", key="ams_upd"):
@@ -491,15 +504,47 @@ with tab_run:
                 continue
             article_url_options.append(u)
             url_labels[u] = f"{a.get('label') or u} ({a.get('id', '')})"
+        scope_q = (
+            st.text_input(
+                "記事候補の検索（ラベル・URL 部分一致）",
+                placeholder="空欄で全記事を候補に表示",
+                key="ams_run_scope_search",
+                help="入力すると下の一覧に表示する記事だけを絞り込みます（大文字小文字は区別しません）。",
+            )
+            or ""
+        ).strip()
+        if scope_q:
+            q = scope_q.lower()
+            scope_options = [
+                u
+                for u in article_url_options
+                if q in url_labels.get(u, "").lower() or q in u.lower()
+            ]
+        else:
+            scope_options = list(article_url_options)
+        if scope_q and not scope_options:
+            st.warning(
+                "検索に一致する記事がありません。条件を変えるか検索を空にしてください。"
+            )
+        st.caption(
+            "検索は **候補の絞り込み** です。一覧に出ていない記事はこの時点では選べません。"
+            " 全記事を選びたいときは検索を空にしてください。"
+            " 候補や検索語を変えたとき、選択内容がリセットされることがあります。"
+        )
+        if "ams_article_scope" not in st.session_state and article_url_options:
+            st.session_state.ams_article_scope = list(article_url_options)
         selected_urls = st.multiselect(
             "在庫チェックする記事",
-            options=article_url_options,
-            default=article_url_options,
+            options=scope_options,
             format_func=lambda u: url_labels.get(u, u),
             key="ams_article_scope",
             help="すべて選択＝従来どおり全記事が対象。一部だけ選ぶと部分チェックになります。",
         )
-        st.write(f"登録記事: **{len(article_url_options)}** 件 / 今回チェック: **{len(selected_urls)}** 件")
+        st.write(
+            f"登録記事: **{len(article_url_options)}** 件 / "
+            f"候補表示: **{len(scope_options)}** 件 / "
+            f"今回チェック: **{len(selected_urls)}** 件"
+        )
 
         run_pending = bool(st.session_state.get("ams_run_pending"))
         _run_btn_kwargs: dict = {
