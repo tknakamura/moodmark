@@ -30,6 +30,7 @@ from tools.moodmark_stock.scraper import (
 )
 from tools.moodmark_stock import state as moodmark_state
 from tools.moodmark_stock.snapshot_display import (
+    article_cache_meta_utc_times,
     filter_article_to_products_by_registration,
     rehydrate_article_labels_in_df,
     registered_article_urls,
@@ -393,15 +394,57 @@ with tab_manage:
     if not arts:
         st.warning("記事が未登録です。上でURLを追加してください。")
     else:
+        snap_manage = _get_state().get("last_snapshot")
+        reg_urls_manage = registered_article_urls(arts)
+        atp_manage = (
+            filter_article_to_products_by_registration(
+                (snap_manage or {}).get("article_to_products") or {},
+                reg_urls_manage,
+            )
+            if snap_manage
+            else {}
+        )
         df_reg = pd.DataFrame(arts)
+        _af_list: list = []
+        _pl_list: list = []
+        for u in df_reg.get("url", pd.Series(dtype=object)).fillna("").astype(str):
+            uu = u.strip()
+            plist_m = atp_manage.get(uu, [])
+            if not isinstance(plist_m, list):
+                plist_m = []
+            afd, pld = article_cache_meta_utc_times(snap_manage, uu, plist_m)
+            _af_list.append(afd if afd is not None else pd.NaT)
+            _pl_list.append(pld if pld is not None else pd.NaT)
+        df_reg["記事ページ取得(UTC)"] = _af_list
+        df_reg["掲載商品在庫の最新(UTC)"] = _pl_list
         reg_cols = ["label", "url", "id"]
         for c in ("ga4_pageviews_7d", "ga4_pv_fetched_at"):
             if c in df_reg.columns:
                 reg_cols.append(c)
+        reg_cols += ["記事ページ取得(UTC)", "掲載商品在庫の最新(UTC)"]
+        st.caption(
+            "記事ページ取得: 最終スナップショットの cache で、当該記事 HTML から掲載商品 URL を取り直した時刻。"
+            " 掲載商品在庫の最新: 当該記事の掲載リストに含まれる商品の在庫取得時刻のうち最も新しいもの（いずれも UTC）。"
+            " 未実行・メタなしは空欄。"
+        )
         st.dataframe(
             df_reg[[c for c in reg_cols if c in df_reg.columns]],
             use_container_width=True,
             hide_index=True,
+            column_config={
+                "記事ページ取得(UTC)": st.column_config.DatetimeColumn(
+                    "記事ページ取得(UTC)",
+                    format="YYYY-MM-DD HH:mm",
+                    timezone="UTC",
+                    help="cache_meta.articles の fetched_at（UTC）",
+                ),
+                "掲載商品在庫の最新(UTC)": st.column_config.DatetimeColumn(
+                    "掲載商品在庫の最新(UTC)",
+                    format="YYYY-MM-DD HH:mm",
+                    timezone="UTC",
+                    help="cache_meta.products の checked_at の最大（UTC）",
+                ),
+            },
         )
         opts = {f"{a.get('label') or a.get('url')} ({a.get('id')})": a["id"] for a in arts}
         pick = st.selectbox(
@@ -724,6 +767,11 @@ with tab_view:
                 " 期間の終端は本日から3日前、そこからさかのぼる7日間（処理遅延を避けるため）。"
                 " 記事の登録・更新時に取得します。"
             )
+            st.caption(
+                "記事ページ取得(UTC): 当該記事 HTML から掲載商品 URL を取り直した時刻（cache_meta.articles）。"
+                " 掲載商品在庫の最新(UTC): 当該記事の掲載リストに含まれる商品の在庫取得時刻のうち最も新しいもの（cache_meta.products）。"
+                " 未実行・メタなしは空欄。"
+            )
             product_stock = snap.get("product_stock") or {}
             summary_rows = []
             for aurl, plist in article_to_products.items():
@@ -744,6 +792,9 @@ with tab_view:
                         pv7 = int(art["ga4_pageviews_7d"])
                     except (TypeError, ValueError):
                         pv7 = None
+                art_fetch_dt, prod_latest_dt = article_cache_meta_utc_times(
+                    snap, aurl, plist if isinstance(plist, list) else []
+                )
                 summary_rows.append(
                     {
                         "記事": label,
@@ -751,6 +802,8 @@ with tab_view:
                         "在庫注意": bad,
                         "article_url": aurl,
                         "PV(7日)": pv7,
+                        "_art_fetch_dt": art_fetch_dt,
+                        "_prod_latest_dt": prod_latest_dt,
                     }
                 )
             if not summary_rows:
@@ -773,6 +826,8 @@ with tab_view:
                     if u and not u.startswith(("http://", "https://")):
                         u = "https://" + u.lstrip("/")
                     pv_cell = r.get("PV(7日)")
+                    afd = r.get("_art_fetch_dt")
+                    pld = r.get("_prod_latest_dt")
                     table_rows.append(
                         {
                             "記事": r["記事"],
@@ -781,6 +836,12 @@ with tab_view:
                             "在庫注意": bad,
                             "在庫注意率": rate,
                             "PV(7日)": pv_cell,
+                            "記事ページ取得(UTC)": afd
+                            if afd is not None
+                            else pd.NaT,
+                            "掲載商品在庫の最新(UTC)": pld
+                            if pld is not None
+                            else pd.NaT,
                             "記事URL": u,
                             "_sort_oos_rate": sort_oos_rate,
                         }
@@ -826,6 +887,18 @@ with tab_view:
                             "PV(7日)",
                             format="%d",
                             help="GA4 screenPageViews（終端3日前から遡る7日間）。未取得は空欄。",
+                        ),
+                        "記事ページ取得(UTC)": st.column_config.DatetimeColumn(
+                            "記事ページ取得(UTC)",
+                            format="YYYY-MM-DD HH:mm",
+                            timezone="UTC",
+                            help="cache_meta.articles の fetched_at（UTC）",
+                        ),
+                        "掲載商品在庫の最新(UTC)": st.column_config.DatetimeColumn(
+                            "掲載商品在庫の最新(UTC)",
+                            format="YYYY-MM-DD HH:mm",
+                            timezone="UTC",
+                            help="cache_meta.products の checked_at の最大（UTC）",
                         ),
                     },
                     hide_index=True,

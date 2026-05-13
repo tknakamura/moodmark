@@ -3,9 +3,67 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
+
+
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    """ISO 文字列を timezone 付き datetime に（失敗時 None）。"""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (TypeError, ValueError):
+        return None
+
+
+def article_cache_meta_utc_times(
+    snap: Optional[Dict[str, Any]],
+    article_url: str,
+    product_urls: List[str],
+) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """
+    last_snapshot.cache_meta から、記事ページ取得時刻と掲載商品の在庫取得の最新時刻を返す。
+    いずれも UTC 想定。snap が無い・メタが無い場合は None。
+    """
+    if not snap or not isinstance(snap, dict):
+        return None, None
+    cm = snap.get("cache_meta") or {}
+    if not isinstance(cm, dict):
+        return None, None
+    arts = cm.get("articles") or {}
+    prods = cm.get("products") or {}
+    if not isinstance(arts, dict) or not isinstance(prods, dict):
+        return None, None
+    aurl = (article_url or "").strip()
+    ent_a = arts.get(aurl)
+    if ent_a is None and aurl.endswith("/"):
+        ent_a = arts.get(aurl.rstrip("/"))
+    elif ent_a is None and aurl and not aurl.endswith("/"):
+        ent_a = arts.get(aurl + "/")
+    article_dt: Optional[datetime] = None
+    if isinstance(ent_a, dict):
+        article_dt = _parse_iso_datetime(ent_a.get("fetched_at"))
+
+    latest: Optional[datetime] = None
+    for p in product_urls or []:
+        if not isinstance(p, str) or not p.strip():
+            continue
+        ent_p = prods.get(p.strip())
+        if not isinstance(ent_p, dict):
+            continue
+        ct = _parse_iso_datetime(ent_p.get("checked_at"))
+        if ct is not None and (latest is None or ct > latest):
+            latest = ct
+    return article_dt, latest
 
 
 def split_article_urls(article_urls) -> List[str]:
