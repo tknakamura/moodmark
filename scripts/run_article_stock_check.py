@@ -64,6 +64,21 @@ def main() -> int:
         only_check_article_urls=only_urls,
     )
     store.record_snapshot(snap)
+    hook = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
+    if hook:
+        try:
+            from tools.moodmark_stock.notify import post_slack_summary
+
+            post_slack_summary(
+                snap,
+                arts,
+                hook,
+                run_url=(os.environ.get("MOODMARK_STOCK_NOTIFY_RUN_URL") or "").strip()
+                or None,
+            )
+            print("Slack notification sent.")
+        except Exception as e:
+            print(f"Slack notify error: {e}", file=sys.stderr)
     rs = snap.get("run_stats") or {}
     print(
         f"Articles fetched/cached: {rs.get('articles_fetched')}/{rs.get('articles_cached')}"

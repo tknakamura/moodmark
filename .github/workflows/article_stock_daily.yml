@@ -1,0 +1,37 @@
+name: article-stock-daily
+
+on:
+  schedule:
+    # UTC 19:00 = JST 04:00
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: stock-daily
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run article stock check
+        env:
+          DATABASE_URL: ${{ secrets.MOODMARK_DATABASE_URL }}
+          MOODMARK_STOCK_DELAY: "0.5"
+          MOODMARK_STOCK_ARTICLE_WORKERS: "4"
+          MOODMARK_STOCK_PRODUCT_WORKERS: "12"
+          MOODMARK_STOCK_CACHE_HOURS: "24"
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          MOODMARK_STOCK_NOTIFY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python scripts/run_article_stock_check.py

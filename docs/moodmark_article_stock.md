@@ -114,10 +114,34 @@ export MOODMARK_STOCK_PRODUCT_WORKERS=12
 export MOODMARK_STOCK_CACHE_HOURS=24
 # 毎回フル取得: export MOODMARK_STOCK_FORCE_FULL=1
 # 特定記事のみ: export MOODMARK_STOCK_ONLY_URLS='https://...,https://...'
+# Slack 通知（任意）: export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...'
 python scripts/run_article_stock_check.py
 ```
 
-- **GitHub Actions** / **Render Cron**: 上記を `schedule` 実行。`DATABASE_URL` を渡せば結果が DB に蓄積されます。
+### GitHub Actions（日次自動実行・推奨）
+
+リポジトリに [`.github/workflows/article_stock_daily.yml`](../.github/workflows/article_stock_daily.yml) を配置しています。
+
+| 項目 | 内容 |
+|------|------|
+| スケジュール | 毎日 **UTC 19:00**（**JST 04:00**） |
+| 手動実行 | Actions タブ → **article-stock-daily** → **Run workflow** |
+| 同時実行 | `stock-daily` グループで重複実行を抑止（前回実行中はスキップ） |
+| 実行内容 | `python scripts/run_article_stock_check.py`（ダッシュボードと同じ DB へ `last_snapshot` を保存） |
+
+**GitHub Secrets（Settings → Secrets and variables → Actions）**
+
+| Secret | 説明 |
+|--------|------|
+| `MOODMARK_DATABASE_URL` | Render PostgreSQL の接続 URL（External URL 推奨。`?sslmode=require` が無ければ付与） |
+| `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL（毎回サマリ通知） |
+
+ワークフローは `DATABASE_URL` に `MOODMARK_DATABASE_URL` をマップします。Slack にはユニーク商品数・在庫注意件数（内訳）・記事警告件数・取得統計・在庫注意 SKU 最大5件・Actions 実行ログ URL を投稿します（[notify.py](../tools/moodmark_stock/notify.py)）。
+
+**注意**
+
+- 日次実行は **GA4 の商品名・購入数・収益は取得しません**（Streamlit の「在庫チェック実行」でオプション ON のときのみ）。在庫と掲載商品 URL の更新が目的です。
+- 既定 **TTL 24 時間**のため、前日と同じ日に2回走るとキャッシュヒットが多くなります。完全再取得が必要なときは手動実行時に workflow の env に `MOODMARK_STOCK_FORCE_FULL: "1"` を追加するか、ローカルで `MOODMARK_STOCK_FORCE_FULL=1` を指定してください。
 - Streamlit 内のタイマーだけに頼らない運用を推奨します。
 
 ## 記事で商品が0件になる場合
