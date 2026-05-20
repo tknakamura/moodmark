@@ -32,6 +32,7 @@ from tools.moodmark_stock import state as moodmark_state
 from tools.moodmark_stock.snapshot_display import (
     article_cache_meta_utc_times,
     filter_article_to_products_by_registration,
+    format_jst,
     rehydrate_article_labels_in_df,
     registered_article_urls,
 )
@@ -415,16 +416,16 @@ with tab_manage:
             afd, pld = article_cache_meta_utc_times(snap_manage, uu, plist_m)
             _af_list.append(afd if afd is not None else pd.NaT)
             _pl_list.append(pld if pld is not None else pd.NaT)
-        df_reg["記事ページ取得(UTC)"] = _af_list
-        df_reg["掲載商品在庫の最新(UTC)"] = _pl_list
+        df_reg["記事ページ取得(JST)"] = _af_list
+        df_reg["掲載商品在庫の最新(JST)"] = _pl_list
         reg_cols = ["label", "url", "id"]
         for c in ("ga4_pageviews_7d", "ga4_pv_fetched_at"):
             if c in df_reg.columns:
                 reg_cols.append(c)
-        reg_cols += ["記事ページ取得(UTC)", "掲載商品在庫の最新(UTC)"]
+        reg_cols += ["記事ページ取得(JST)", "掲載商品在庫の最新(JST)"]
         st.caption(
             "記事ページ取得: 最終スナップショットの cache で、当該記事 HTML から掲載商品 URL を取り直した時刻。"
-            " 掲載商品在庫の最新: 当該記事の掲載リストに含まれる商品の在庫取得時刻のうち最も新しいもの（いずれも UTC）。"
+            " 掲載商品在庫の最新: 当該記事の掲載リストに含まれる商品の在庫取得時刻のうち最も新しいもの（いずれも JST 表示／保存は UTC）。"
             " 未実行・メタなしは空欄。"
         )
         st.dataframe(
@@ -432,17 +433,17 @@ with tab_manage:
             use_container_width=True,
             hide_index=True,
             column_config={
-                "記事ページ取得(UTC)": st.column_config.DatetimeColumn(
-                    "記事ページ取得(UTC)",
+                "記事ページ取得(JST)": st.column_config.DatetimeColumn(
+                    "記事ページ取得(JST)",
                     format="YYYY-MM-DD HH:mm",
-                    timezone="UTC",
-                    help="cache_meta.articles の fetched_at（UTC）",
+                    timezone="Asia/Tokyo",
+                    help="cache_meta.articles の fetched_at（JST 表示／保存は UTC）",
                 ),
-                "掲載商品在庫の最新(UTC)": st.column_config.DatetimeColumn(
-                    "掲載商品在庫の最新(UTC)",
+                "掲載商品在庫の最新(JST)": st.column_config.DatetimeColumn(
+                    "掲載商品在庫の最新(JST)",
                     format="YYYY-MM-DD HH:mm",
-                    timezone="UTC",
-                    help="cache_meta.products の checked_at の最大（UTC）",
+                    timezone="Asia/Tokyo",
+                    help="cache_meta.products の checked_at の最大（JST 表示／保存は UTC）",
                 ),
             },
         )
@@ -653,7 +654,8 @@ with tab_run:
                 )
                 w = snap.get("article_warnings") or []
                 success_text = (
-                    f"完了: 商品 {len(snap.get('rows') or [])} 件（実行時刻: {snap.get('run_at', '')}）"
+                    f"完了: 商品 {len(snap.get('rows') or [])} 件"
+                    f"（実行時刻: {format_jst(snap.get('run_at'))}）"
                 )
                 _run_result = {
                     "ok": True,
@@ -710,7 +712,7 @@ with tab_view:
         )
 
         st.subheader("サマリ")
-        st.caption(f"最終実行（UTC）: `{snap.get('run_at', '')}`")
+        st.caption(f"最終実行（JST）: `{format_jst(snap.get('run_at'))}`")
         rows = snap.get("rows") or []
         if not rows:
             st.warning("商品0件でした。")
@@ -768,9 +770,9 @@ with tab_view:
                 " 記事の登録・更新時に取得します。"
             )
             st.caption(
-                "記事ページ取得(UTC): 当該記事 HTML から掲載商品 URL を取り直した時刻（cache_meta.articles）。"
-                " 掲載商品在庫の最新(UTC): 当該記事の掲載リストに含まれる商品の在庫取得時刻のうち最も新しいもの（cache_meta.products）。"
-                " 未実行・メタなしは空欄。"
+                "記事ページ取得(JST): 当該記事 HTML から掲載商品 URL を取り直した時刻（cache_meta.articles）。"
+                " 掲載商品在庫の最新(JST): 当該記事の掲載リストに含まれる商品の在庫取得時刻のうち最も新しいもの（cache_meta.products）。"
+                " いずれも JST 表示（保存は UTC）。未実行・メタなしは空欄。"
             )
             product_stock = snap.get("product_stock") or {}
             summary_rows = []
@@ -836,10 +838,10 @@ with tab_view:
                             "在庫注意": bad,
                             "在庫注意率": rate,
                             "PV(7日)": pv_cell,
-                            "記事ページ取得(UTC)": afd
+                            "記事ページ取得(JST)": afd
                             if afd is not None
                             else pd.NaT,
-                            "掲載商品在庫の最新(UTC)": pld
+                            "掲載商品在庫の最新(JST)": pld
                             if pld is not None
                             else pd.NaT,
                             "記事URL": u,
@@ -888,17 +890,17 @@ with tab_view:
                             format="%d",
                             help="GA4 screenPageViews（終端3日前から遡る7日間）。未取得は空欄。",
                         ),
-                        "記事ページ取得(UTC)": st.column_config.DatetimeColumn(
-                            "記事ページ取得(UTC)",
+                        "記事ページ取得(JST)": st.column_config.DatetimeColumn(
+                            "記事ページ取得(JST)",
                             format="YYYY-MM-DD HH:mm",
-                            timezone="UTC",
-                            help="cache_meta.articles の fetched_at（UTC）",
+                            timezone="Asia/Tokyo",
+                            help="cache_meta.articles の fetched_at（JST 表示／保存は UTC）",
                         ),
-                        "掲載商品在庫の最新(UTC)": st.column_config.DatetimeColumn(
-                            "掲載商品在庫の最新(UTC)",
+                        "掲載商品在庫の最新(JST)": st.column_config.DatetimeColumn(
+                            "掲載商品在庫の最新(JST)",
                             format="YYYY-MM-DD HH:mm",
-                            timezone="UTC",
-                            help="cache_meta.products の checked_at の最大（UTC）",
+                            timezone="Asia/Tokyo",
+                            help="cache_meta.products の checked_at の最大（JST 表示／保存は UTC）",
                         ),
                     },
                     hide_index=True,

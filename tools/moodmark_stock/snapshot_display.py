@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import pandas as pd
+
+JST = timezone(timedelta(hours=9))
 
 
 def _parse_iso_datetime(value: Any) -> Optional[datetime]:
@@ -23,6 +25,22 @@ def _parse_iso_datetime(value: Any) -> Optional[datetime]:
         return dt
     except (TypeError, ValueError):
         return None
+
+
+def format_jst(value: Union[Any, datetime, None], *, default: str = "—") -> str:
+    """UTC ISO または timezone-aware datetime を JST 文字列に（画面表示用）。"""
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        dt = _parse_iso_datetime(value)
+    if dt is None:
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return default
+        s = str(value).strip()
+        return s if s else default
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(JST).strftime("%Y-%m-%d %H:%M JST")
 
 
 def article_cache_meta_utc_times(
