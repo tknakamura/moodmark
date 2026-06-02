@@ -822,8 +822,7 @@ with tab_view:
                     n = int(r["掲載数"])
                     bad = int(r["在庫注意"])
                     ok = n - bad
-                    rate = f"{bad / n * 100:.1f}%" if n else "—"
-                    sort_oos_rate = (bad / n) if n else float("nan")
+                    rate_pct = (bad / n * 100) if n else float("nan")
                     u = str(r.get("article_url") or "").strip()
                     if u and not u.startswith(("http://", "https://")):
                         u = "https://" + u.lstrip("/")
@@ -836,7 +835,7 @@ with tab_view:
                             "掲載リンク数": n,
                             "在庫あり": ok,
                             "在庫注意": bad,
-                            "在庫注意率": rate,
+                            "在庫注意率": rate_pct,
                             "PV(7日)": pv_cell,
                             "記事ページ取得(JST)": afd
                             if afd is not None
@@ -845,7 +844,6 @@ with tab_view:
                             if pld is not None
                             else pd.NaT,
                             "記事URL": u,
-                            "_sort_oos_rate": sort_oos_rate,
                         }
                     )
                 article_table = pd.DataFrame(table_rows)
@@ -858,14 +856,11 @@ with tab_view:
                     )
                 else:
                     article_table = article_table.sort_values(
-                        ["_sort_oos_rate", "在庫注意"],
+                        ["在庫注意率", "在庫注意"],
                         ascending=[False, False],
                         na_position="last",
                         kind="mergesort",
                     )
-                article_table = article_table.drop(
-                    columns=["_sort_oos_rate"], errors="ignore"
-                )
                 st.dataframe(
                     article_table,
                     column_config={
@@ -884,6 +879,11 @@ with tab_view:
                             "在庫注意",
                             format="%d",
                             help="入荷待ち・SOLD OUT・取得エラー等",
+                        ),
+                        "在庫注意率": st.column_config.NumberColumn(
+                            "在庫注意率",
+                            format="%.1f%%",
+                            help="在庫注意 ÷ 掲載リンク数（%）。列ヘッダークリックで数値順に並べ替えできます。",
                         ),
                         "PV(7日)": st.column_config.NumberColumn(
                             "PV(7日)",
