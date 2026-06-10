@@ -64,8 +64,28 @@ def main() -> int:
         only_check_article_urls=only_urls,
     )
     store.record_snapshot(snap)
+    run_url = (os.environ.get("MOODMARK_STOCK_NOTIFY_RUN_URL") or "").strip() or None
+    bot_token = os.environ.get("SLACK_BOT_TOKEN", "").strip()
+    channel = (
+        os.environ.get("SLACK_CHANNEL_ID", "").strip()
+        or os.environ.get("SLACK_CHANNEL", "").strip()
+    )
     hook = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
-    if hook:
+    if bot_token and channel:
+        try:
+            from tools.moodmark_stock.notify import post_slack_thread
+
+            post_slack_thread(
+                snap,
+                arts,
+                bot_token=bot_token,
+                channel=channel,
+                run_url=run_url,
+            )
+            print("Slack thread notification sent.")
+        except Exception as e:
+            print(f"Slack notify error: {e}", file=sys.stderr)
+    elif hook:
         try:
             from tools.moodmark_stock.notify import post_slack_summary
 
@@ -73,8 +93,7 @@ def main() -> int:
                 snap,
                 arts,
                 hook,
-                run_url=(os.environ.get("MOODMARK_STOCK_NOTIFY_RUN_URL") or "").strip()
-                or None,
+                run_url=run_url,
             )
             print("Slack notification sent.")
         except Exception as e:

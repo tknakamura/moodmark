@@ -32,6 +32,8 @@ jobs:
           MOODMARK_STOCK_ARTICLE_WORKERS: "4"
           MOODMARK_STOCK_PRODUCT_WORKERS: "12"
           MOODMARK_STOCK_CACHE_HOURS: "24"
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           MOODMARK_STOCK_NOTIFY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: python scripts/run_article_stock_check.py

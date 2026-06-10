@@ -115,7 +115,11 @@ export MOODMARK_STOCK_PRODUCT_WORKERS=12
 export MOODMARK_STOCK_CACHE_HOURS=24
 # 毎回フル取得: export MOODMARK_STOCK_FORCE_FULL=1
 # 特定記事のみ: export MOODMARK_STOCK_ONLY_URLS='https://...,https://...'
-# Slack 通知（任意）: export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...'
+# Slack 通知（Bot API・推奨）:
+#   export SLACK_BOT_TOKEN='xoxb-...'
+#   export SLACK_CHANNEL_ID='C...'
+# Slack 通知（Webhook フォールバック）:
+#   export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...'
 python scripts/run_article_stock_check.py
 ```
 
@@ -135,9 +139,29 @@ python scripts/run_article_stock_check.py
 | Secret | 説明 |
 |--------|------|
 | `MOODMARK_DATABASE_URL` | Render PostgreSQL の接続 URL（External URL 推奨。`?sslmode=require` が無ければ付与） |
-| `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL（毎回サマリ通知） |
+| `SLACK_BOT_TOKEN` | Slack Bot User OAuth Token（`xoxb-...`）。**推奨**。設定時はスレッド形式で通知 |
+| `SLACK_CHANNEL_ID` | 通知先チャンネル ID（`C...`）。`SLACK_BOT_TOKEN` とセットで指定 |
+| `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL（Bot トークン未設定時のフォールバック） |
 
-ワークフローは `DATABASE_URL` に `MOODMARK_DATABASE_URL` をマップします。Slack にはユニーク商品数・在庫注意件数（内訳）・記事警告件数・取得統計・在庫注意 SKU 最大5件・Actions 実行ログ URL を投稿します（[notify.py](../tools/moodmark_stock/notify.py)）。
+ワークフローは `DATABASE_URL` に `MOODMARK_DATABASE_URL` をマップします。
+
+#### Slack 通知（スレッド形式・推奨）
+
+`SLACK_BOT_TOKEN` と `SLACK_CHANNEL_ID`（または `SLACK_CHANNEL`）が両方設定されている場合、[notify.py](../tools/moodmark_stock/notify.py) の `post_slack_thread` が Slack Web API（`chat.postMessage`）で次の2通を投稿します。
+
+| 投稿 | 内容 |
+|------|------|
+| **親メッセージ** | `*MOO:D MARK 在庫チェック完了（mm/dd）*` + 主要サマリ1行（例: `ユニーク商品 N 件 / 在庫注意 X 件`） |
+| **スレッド返信** | 実行時刻・登録記事数・在庫注意内訳・在庫注意 SKU 最大5件・記事警告・取得統計・Actions 実行ログ URL |
+
+**Slack App の準備**
+
+1. [Slack API](https://api.slack.com/apps) で App を作成し、**OAuth & Permissions** の Bot Token Scopes に `chat:write` を追加
+2. ワークスペースにインストールし **Bot User OAuth Token**（`xoxb-...`）を取得
+3. 通知先チャンネルに Bot を招待（`/invite @Bot名`）
+4. チャンネル ID（`C...`）を GitHub Secrets の `SLACK_CHANNEL_ID` に登録
+
+Bot トークンが未設定の場合は、従来どおり `SLACK_WEBHOOK_URL` へ1通のテキストサマリを投稿します（Incoming Webhook はスレッド化不可）。
 
 **注意**
 

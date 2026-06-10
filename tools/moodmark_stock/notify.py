@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""在庫チェック完了の Slack 通知（Incoming Webhook）。"""
+"""在庫チェック完了の Slack 通知（Bot API / Incoming Webhook）。"""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 JST = timezone(timedelta(hours=9))
+SLACK_API_POST_MESSAGE = "https://slack.com/api/chat.postMessage"
 
 
 def _parse_run_at(run_at: Any) -> Optional[datetime]:
@@ -36,6 +37,13 @@ def _format_run_times(run_at: Any) -> str:
     utc_s = dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     jst_s = dt.astimezone(JST).strftime("%Y-%m-%d %H:%M JST")
     return f"{utc_s} / {jst_s}"
+
+
+def _format_run_date_jst(run_at: Any) -> str:
+    dt = _parse_run_at(run_at)
+    if not dt:
+        return "—"
+    return dt.astimezone(JST).strftime("%m/%d")
 
 
 def _summarize_rows(rows: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -69,6 +77,12 @@ def _summarize_rows(rows: List[Dict[str, Any]]) -> Dict[str, int]:
     }
 
 
+def _summary_one_liner(stats: Dict[str, int]) -> str:
+    if stats["oos"] == 0:
+        return f"ユニーク商品 {stats['total']} 件 / *すべて在庫あり*"
+    return f"ユニーク商品 {stats['total']} 件 / 在庫注意 *{stats['oos']}* 件"
+
+
 def _alert_line_items(rows: List[Dict[str, Any]], limit: int = 5) -> List[str]:
     items: List[str] = []
     for r in rows:
@@ -89,13 +103,22 @@ def _alert_line_items(rows: List[Dict[str, Any]], limit: int = 5) -> List[str]:
     return items
 
 
-def build_slack_summary_text(
+def build_parent_text(snap: Dict[str, Any]) -> str:
+    """スレッド親メッセージ: タイトル（mm/dd）+ 主要サマリ1行。"""
+    rows = snap.get("rows") or []
+    stats = _summarize_rows(rows)
+    date_s = _format_run_date_jst(snap.get("run_at"))
+    title = f"*MOO:D MARK 在庫チェック完了（{date_s}）*"
+    return f"{title}\n{_summary_one_liner(stats)}"
+
+
+def build_thread_detail_text(
     snap: Dict[str, Any],
     articles: List[Dict[str, Any]],
     *,
     run_url: Optional[str] = None,
 ) -> str:
-    """Slack 用プレーンテキスト（Incoming Webhook の text フィールド）。"""
+    """スレッド返信用の詳細テキスト。"""
     rows = snap.get("rows") or []
     stats = _summarize_rows(rows)
     warnings = snap.get("article_warnings") or []
@@ -103,7 +126,6 @@ def build_slack_summary_text(
     art_count = len(articles) if articles else 0
 
     lines = [
-        "*MOO:D MARK 在庫チェック完了*",
         f"実行時刻: {_format_run_times(snap.get('run_at'))}",
         f"登録記事: {art_count} 件 / ユニーク商品: {stats['total']} 件",
     ]
@@ -144,6 +166,80 @@ def build_slack_summary_text(
         lines.append(f"<{run_url}|GitHub Actions の実行ログ>")
 
     return "\n".join(lines)
+
+
+def build_slack_summary_text(
+    snap: Dict[str, Any],
+    articles: List[Dict[str, Any]],
+    *,
+    run_url: Optional[str] = None,
+) -> str:
+    """Slack 用プレーンテキスト（Incoming Webhook の text フィールド）。"""
+    parent = build_parent_text(snap)
+    detail = build_thread_detail_text(snap, articles, run_url=run_url)
+    return f"{parent}\n\n{detail}"
+
+
+def _chat_post_message(
+    bot_token: str,
+    channel: str,
+    text: str,
+    *,
+    thread_ts: Optional[str] = None,
+    timeout_s: float = 15.0,
+) -> str:
+    """Slack chat.postMessage を呼び出し、投稿の ts を返す。"""
+    payload: Dict[str, Any] = {"channel": channel, "text": text}
+    if thread_ts:
+        payload["thread_ts"] = thread_ts
+    resp = requests.post(
+        SLACK_API_POST_MESSAGE,
+        json=payload,
+        timeout=timeout_s,
+        headers={
+            "Authorization": f"Bearer {bot_token}",
+            "Content-Type": "application/json; charset=utf-8",
+        },
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"Slack API error: {data.get('error', 'unknown')}")
+    ts = data.get("ts")
+    if not ts:
+        raise RuntimeError("Slack API did not return ts")
+    return str(ts)
+
+
+def post_slack_thread(
+    snap: Dict[str, Any],
+    articles: List[Dict[str, Any]],
+    *,
+    bot_token: str,
+    channel: str,
+    run_url: Optional[str] = None,
+    timeout_s: float = 15.0,
+) -> None:
+    """Bot API で親メッセージを投稿し、スレッドに詳細を返信。失敗時は例外を送出。"""
+    token = (bot_token or "").strip()
+    ch = (channel or "").strip()
+    if not token or not ch:
+        return
+    parent_ts = _chat_post_message(
+        token,
+        ch,
+        build_parent_text(snap),
+        timeout_s=timeout_s,
+    )
+    detail = build_thread_detail_text(snap, articles, run_url=run_url)
+    if detail.strip():
+        _chat_post_message(
+            token,
+            ch,
+            detail,
+            thread_ts=parent_ts,
+            timeout_s=timeout_s,
+        )
 
 
 def post_slack_summary(
