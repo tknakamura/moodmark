@@ -4,6 +4,7 @@
 記事掲載商品の在庫可視化（MOO:D MARK）
 """
 
+import gc
 import html as html_escape
 import logging
 import os
@@ -581,8 +582,8 @@ elif active_tab == _TAB_RUN:
             help="期間は記事のPV(7日)と同じ（終端3日前から遡る7日）。purchase 由来の指標です。",
         )
     with c2:
-        w_art = st.slider("記事ページ取得の同時接続数", 1, 16, 4, key="ams_wa")
-        w_prd = st.slider("商品ページ取得の同時接続数", 1, 32, 12, key="ams_wp")
+        w_art = st.slider("記事ページ取得の同時接続数", 1, 16, 3, key="ams_wa")
+        w_prd = st.slider("商品ページ取得の同時接続数", 1, 32, 6, key="ams_wp")
     delay = st.slider(
         "各ワーカーのリクエスト前待機（秒）",
         0.0,
@@ -703,6 +704,8 @@ elif active_tab == _TAB_RUN:
                         _enrich_snapshot_rows_ga4_commerce(snap)
                 get_store().record_snapshot(snap)
                 _invalidate_state_cache()
+                # 在庫チェックは並列取得・解析でメモリのピークが高い。明示的に解放。
+                gc.collect()
                 prog.progress(1.0)
                 status.text("完了")
                 rs = snap.get("run_stats") or {}
@@ -1106,6 +1109,9 @@ elif active_tab == _TAB_VIEW:
                     f'<div style="overflow:auto;max-height:920px;">{table_html}</div>',
                     unsafe_allow_html=True,
                 )
+                # 大きな中間オブジェクト（DataFrame コピー・HTML 文字列）を解放
+                del table_html, view
+                gc.collect()
 
 elif active_tab == _TAB_BACKUP:
     st.subheader("JSON ダウンロード")
