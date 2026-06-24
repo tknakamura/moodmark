@@ -9,6 +9,7 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 import pandas as pd
@@ -40,6 +41,12 @@ from tools.moodmark_stock.store import get_store
 from tools.streamlit_branding import render_page_title_with_logo
 
 logger = logging.getLogger(__name__)
+
+_TAB_VIEW = "結果の表示"
+_TAB_MANAGE = "記事URLの管理"
+_TAB_RUN = "在庫チェック実行"
+_TAB_BACKUP = "バックアップ / 復元"
+_TAB_LABELS = (_TAB_VIEW, _TAB_MANAGE, _TAB_RUN, _TAB_BACKUP)
 
 RESULT_TABLE_HEADERS = {
     "product_url": "商品ページ",
@@ -301,6 +308,52 @@ def _sync_article_ga4_pageviews(store, article_id: str, article_url: str) -> Non
         )
 
 
+def _article_edit_key_suffix(article_id: str) -> str:
+    return str(article_id).replace("/", "_")
+
+
+def _prune_stale_article_edit_keys(valid_article_ids: Set[str]) -> None:
+    valid_suffixes = {_article_edit_key_suffix(aid) for aid in valid_article_ids}
+    for key in list(st.session_state.keys()):
+        for prefix in ("ams_edit_url_", "ams_edit_label_"):
+            if key.startswith(prefix):
+                suffix = key[len(prefix):]
+                if suffix not in valid_suffixes:
+                    st.session_state.pop(key, None)
+                break
+
+
+def _sync_article_widget_state(articles: List[Dict[str, Any]]) -> None:
+    """selectbox / multiselect の選択値を現行記事リストに合わせる。"""
+    valid_ids = {a["id"] for a in articles}
+    valid_urls = {
+        (a.get("url") or "").strip()
+        for a in articles
+        if (a.get("url") or "").strip()
+    }
+    opts_keys = {
+        f"{a.get('label') or a.get('url')} ({a.get('id')})" for a in articles
+    }
+    pick = st.session_state.get("ams_edit_pick")
+    if pick is not None and pick not in opts_keys:
+        st.session_state.pop("ams_edit_pick", None)
+    if "ams_article_scope" in st.session_state:
+        st.session_state.ams_article_scope = [
+            u for u in st.session_state.ams_article_scope if u in valid_urls
+        ]
+    _prune_stale_article_edit_keys(valid_ids)
+
+
+def _after_article_list_mutation(*, removed_article_id: Optional[str] = None) -> None:
+    _invalidate_state_cache()
+    articles = get_store().load_state().get("articles") or []
+    _sync_article_widget_state(articles)
+    if removed_article_id:
+        suffix = _article_edit_key_suffix(removed_article_id)
+        st.session_state.pop(f"ams_edit_url_{suffix}", None)
+        st.session_state.pop(f"ams_edit_label_{suffix}", None)
+
+
 render_page_title_with_logo(
     "📦 記事掲載商品の在庫",
     title_element_id="article-stock-title",
@@ -355,11 +408,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 # 結果の表示をデフォルトにするため先頭に配置
-tab_view, tab_manage, tab_run, tab_backup = st.tabs(
-    ["結果の表示", "記事URLの管理", "在庫チェック実行", "バックアップ / 復元"]
+if "ams_active_tab" not in st.session_state:
+    st.session_state.ams_active_tab = _TAB_VIEW
+
+active_tab = st.radio(
+    "機能",
+    _TAB_LABELS,
+    horizontal=True,
+    key="ams_active_tab",
+    label_visibility="collapsed",
 )
 
-with tab_manage:
+if active_tab == _TAB_MANAGE:
     st.subheader("記事URLの登録")
     c1, c2 = st.columns([3, 1])
     with c1:
@@ -388,10 +448,12 @@ with tab_manage:
                     _sync_article_ga4_pageviews(store, art["id"], art["url"])
             _invalidate_state_cache()
             st.success("追加しました")
+            _after_article_list_mutation()
             st.rerun()
 
     st.subheader("登録一覧")
     arts = _get_state().get("articles") or []
+    _sync_article_widget_state(arts)
     if not arts:
         st.warning("記事が未登録です。上でURLを追加してください。")
     else:
@@ -430,7 +492,7 @@ with tab_manage:
         )
         st.dataframe(
             df_reg[[c for c in reg_cols if c in df_reg.columns]],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "記事ページ取得(JST)": st.column_config.DatetimeColumn(
@@ -486,15 +548,16 @@ with tab_manage:
                             )
                     _invalidate_state_cache()
                     st.success("更新しました")
+                    _after_article_list_mutation()
                     st.rerun()
         with c2:
             if st.button("削除", key="ams_rm"):
                 store.remove_article(aid)
-                _invalidate_state_cache()
                 st.success("削除しました")
+                _after_article_list_mutation(removed_article_id=aid)
                 st.rerun()
 
-with tab_run:
+elif active_tab == _TAB_RUN:
     st.subheader("今すぐ在庫チェック")
     st.caption(
         "記事・商品は並列取得。前回実行から指定時間以内のデータは再GETしません（強制フルで無効化）。"
@@ -537,6 +600,7 @@ with tab_run:
         " 選んでいない記事は**前回の実行結果**をそのまま表示用データに使います（初回のみ前回がないため未選択は商品0件になります）。"
     )
     arts = _get_state().get("articles") or []
+    _sync_article_widget_state(arts)
     if not arts:
         st.warning("先に「記事URLの管理」で記事を登録してください。")
     else:
@@ -698,7 +762,7 @@ with tab_run:
                 if _res.get("balloons"):
                     st.balloons()
 
-with tab_view:
+elif active_tab == _TAB_VIEW:
     state = _get_state()
     snap = state.get("last_snapshot")
     if not snap:
@@ -904,7 +968,7 @@ with tab_view:
                         ),
                     },
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
             st.subheader("商品一覧")
@@ -1043,7 +1107,7 @@ with tab_view:
                     unsafe_allow_html=True,
                 )
 
-with tab_backup:
+elif active_tab == _TAB_BACKUP:
     st.subheader("JSON ダウンロード")
     st.download_button(
         "現在の設定・最終結果をダウンロード",
@@ -1065,6 +1129,7 @@ with tab_backup:
                     st.error(imp_err)
                 else:
                     _invalidate_state_cache()
+                    _after_article_list_mutation()
                     st.success("復元しました")
                     st.rerun()
 

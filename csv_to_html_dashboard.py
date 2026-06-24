@@ -76,27 +76,27 @@ def render_dashboard_sidebar_nav(*, section_title: str = "### 🔗 ダッシュ�
     st.page_link(
         "csv_to_html_dashboard.py",
         label="📄 CSV to HTML コンバーター",
-        use_container_width=True,
+        width="stretch",
     )
     st.page_link(
         "pages/converter_community.py",
         label="📄 コミュニティコンバーター",
-        use_container_width=True,
+        width="stretch",
     )
     st.page_link(
         "pages/analytics_chat.py",
         label="📊 GA4/GSC AI分析チャット",
-        use_container_width=True,
+        width="stretch",
     )
     st.page_link(
         "pages/image_resize.py",
         label="🖼️ 画像正方形クロップ",
-        use_container_width=True,
+        width="stretch",
     )
     st.page_link(
         "pages/article_stock.py",
         label="📦 記事掲載商品・在庫",
-        use_container_width=True,
+        width="stretch",
     )
     st.markdown("---")
 
