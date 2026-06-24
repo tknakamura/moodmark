@@ -21,6 +21,7 @@ sys.path.append(project_root)
 
 # 認証関連の関数（既存のcsv_to_html_dashboard.pyからインポート）
 from csv_to_html_dashboard import (
+    logout,
     render_dashboard_sidebar_nav,
     render_likepass_footer,
     require_dashboard_login,
@@ -740,9 +741,7 @@ def main():
         if st.session_state.get('username'):
             st.info(f"ログイン中: **{st.session_state.username}**")
         if st.button("🚪 ログアウト", type="secondary"):
-            st.session_state.authenticated = False
-            st.session_state.username = None
-            st.rerun()
+            logout()
     
     # メインエリア
     converter = CommunityCSVToHTMLConverter(article_cgid=article_cgid)
