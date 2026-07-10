@@ -1,0 +1,36 @@
+name: daily-kpi-bot
+
+on:
+  schedule:
+    # UTC 00:00 = JST 09:00
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: daily-kpi
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Daily KPI Bot
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GA4_PROPERTY_ID: "316302380"
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_KPI_CHANNEL_ID: ${{ secrets.SLACK_KPI_CHANNEL_ID }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          MOODMARK_KPI_NOTIFY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python scripts/run_daily_kpi_bot.py
