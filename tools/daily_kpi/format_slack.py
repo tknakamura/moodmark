@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from tools.daily_kpi.ga4_collector import (
     DailyKpiReport,
@@ -70,6 +70,40 @@ def fmt_duration(seconds: float) -> str:
     return f"{minutes}m{secs}s"
 
 
+def short_path(path: str, max_len: int = 48) -> str:
+    """長い pagePath を Slack 向けに短縮。"""
+    p = (path or "").strip()
+    if len(p) <= max_len:
+        return p
+    keep = max_len - 1
+    return p[:keep] + "…"
+
+
+def fmt_metric_bullet(
+    label: str,
+    current: float,
+    previous: float,
+    *,
+    formatter: Callable[[float], str] = fmt_int,
+    show_wow: bool = True,
+) -> str:
+    cur_s = formatter(current)
+    prev_s = formatter(previous)
+    if show_wow:
+        return f"• {label}: *{cur_s}*（前週 {prev_s} / WoW {fmt_wow_short(current, previous)}）"
+    return f"• {label}: *{cur_s}*（前週 {prev_s}）"
+
+
+def fmt_rank_bullet(rank: int, label: str, parts: List[str]) -> str:
+    detail = " / ".join(parts)
+    return f"{rank}. {label} — {detail}"
+
+
+def _bounce_rate_fmt(value: float) -> str:
+    pct = value * 100 if value <= 1 else value
+    return fmt_pct(pct)
+
+
 def _combined_sessions(report: DailyKpiReport) -> Tuple[float, float]:
     cur = report.moodmark.sessions + report.moodmarkgift.sessions
     prev = report.moodmark_compare.sessions + report.moodmarkgift_compare.sessions
@@ -94,28 +128,44 @@ def build_parent_message(report: DailyKpiReport) -> str:
     return f"{title}\n{ec_line} · {idea_line}"
 
 
-def _site_row(
-    label: str,
+def _site_metric_bullets(
     current: SiteDayMetrics,
     previous: SiteDayMetrics,
     *,
     include_purchase: bool,
 ) -> List[str]:
-    rows = [
-        f"| {label} | {fmt_int(current.sessions)} | {fmt_int(previous.sessions)} | {fmt_wow_short(current.sessions, previous.sessions)} |",
-        f"| {label} AU | {fmt_int(current.active_users)} | {fmt_int(previous.active_users)} | {fmt_wow_short(current.active_users, previous.active_users)} |",
-        f"| {label} PV | {fmt_int(current.page_views)} | {fmt_int(previous.page_views)} | {fmt_wow_short(current.page_views, previous.page_views)} |",
-        f"| {label} 直帰率 | {fmt_pct(current.bounce_rate * 100 if current.bounce_rate <= 1 else current.bounce_rate)} | {fmt_pct(previous.bounce_rate * 100 if previous.bounce_rate <= 1 else previous.bounce_rate)} | — |",
-        f"| {label} 滞在 | {fmt_duration(current.avg_session_duration)} | {fmt_duration(previous.avg_session_duration)} | — |",
+    lines = [
+        fmt_metric_bullet("SS", current.sessions, previous.sessions),
+        fmt_metric_bullet("AU", current.active_users, previous.active_users),
+        fmt_metric_bullet("PV", current.page_views, previous.page_views),
+        fmt_metric_bullet(
+            "直帰率",
+            current.bounce_rate,
+            previous.bounce_rate,
+            formatter=_bounce_rate_fmt,
+            show_wow=False,
+        ),
+        fmt_metric_bullet(
+            "滞在",
+            current.avg_session_duration,
+            previous.avg_session_duration,
+            formatter=fmt_duration,
+            show_wow=False,
+        ),
     ]
     if include_purchase:
-        rows.extend(
+        lines.extend(
             [
-                f"| {label} 購入 | {fmt_int(current.purchases)} | {fmt_int(previous.purchases)} | {fmt_wow_short(current.purchases, previous.purchases)} |",
-                f"| {label} 売上 | {fmt_yen(current.purchase_revenue)} | {fmt_yen(previous.purchase_revenue)} | {fmt_wow_short(current.purchase_revenue, previous.purchase_revenue)} |",
+                fmt_metric_bullet("購入", current.purchases, previous.purchases),
+                fmt_metric_bullet(
+                    "売上",
+                    current.purchase_revenue,
+                    previous.purchase_revenue,
+                    formatter=fmt_yen,
+                ),
             ]
         )
-    return rows
+    return lines
 
 
 def build_reply_overview(report: DailyKpiReport) -> str:
@@ -126,36 +176,39 @@ def build_reply_overview(report: DailyKpiReport) -> str:
     lines = [
         f"*📊 サイト横断サマリ*（{rd} vs {cd}）",
         "",
-        "| 指標 | 対象日 | 前週同曜 | WoW |",
-        "| --- | ---: | ---: | ---: |",
+        "*EC*",
+        *_site_metric_bullets(
+            report.moodmark, report.moodmark_compare, include_purchase=True
+        ),
+        "",
+        "*IDEA*",
+        *_site_metric_bullets(
+            report.moodmarkgift, report.moodmarkgift_compare, include_purchase=False
+        ),
+        "",
+        "*合算*",
+        fmt_metric_bullet("SS", combined_cur, combined_prev),
     ]
-    lines.extend(
-        _site_row("EC", report.moodmark, report.moodmark_compare, include_purchase=True)
-    )
-    lines.extend(
-        _site_row(
-            "IDEA",
-            report.moodmarkgift,
-            report.moodmarkgift_compare,
-            include_purchase=False,
-        )
-    )
-    lines.append(
-        f"| 合算 SS | {fmt_int(combined_cur)} | {fmt_int(combined_prev)} | {fmt_wow_short(combined_cur, combined_prev)} |"
-    )
     if report.errors:
         lines.extend(["", "*⚠️ データ取得警告*", *[f"• {e}" for e in report.errors]])
     return "\n".join(lines)
 
 
-def _ranked_ec_table(title: str, rows: List[RankedRow]) -> List[str]:
-    lines = [title, "", "| 項目 | SS | 購入 | 売上 |", "| --- | ---: | ---: | ---: |"]
+def _ranked_ec_bullets(rows: List[RankedRow]) -> List[str]:
     if not rows:
-        lines.append("| — | — | — | — |")
-        return lines
-    for row in rows:
+        return ["（データなし）"]
+    lines: List[str] = []
+    for i, row in enumerate(rows, 1):
         lines.append(
-            f"| {row.label} | {fmt_int(row.sessions)} | {fmt_int(row.purchases)} | {fmt_yen(row.purchase_revenue)} |"
+            fmt_rank_bullet(
+                i,
+                row.label,
+                [
+                    f"SS {fmt_int(row.sessions)}",
+                    f"購入 {fmt_int(row.purchases)}",
+                    fmt_yen(row.purchase_revenue),
+                ],
+            )
         )
     return lines
 
@@ -168,15 +221,37 @@ def build_reply_ec_detail(report: DailyKpiReport) -> str:
         f"購入: *{fmt_int(ec.purchases)}* 件 / 売上: *{fmt_yen(ec.purchase_revenue)}* / "
         f"CVR: *{fmt_pct(ec.purchase_cvr)}* / AOV: *{fmt_yen(ec.avg_order_value)}*",
         f"セッション: {fmt_int(ec.sessions)} · PV: {fmt_int(ec.page_views)} · "
-        f"直帰率: {fmt_pct(ec.bounce_rate * 100 if ec.bounce_rate <= 1 else ec.bounce_rate)}",
+        f"直帰率: {_bounce_rate_fmt(ec.bounce_rate)}",
         "",
+        "*デバイス別 Top5*",
+        *_ranked_ec_bullets(report.ec_devices),
+        "",
+        "*流入チャネル Top5*",
+        *_ranked_ec_bullets(report.ec_channels),
     ]
-    lines.extend(_ranked_ec_table("*デバイス別 Top5*", report.ec_devices))
-    lines.append("")
-    lines.extend(
-        _ranked_ec_table("*流入チャネル Top5*", report.ec_channels)
-    )
     return "\n".join(lines)
+
+
+def _ranked_page_bullets(rows: List[RankedRow], *, value_label: str) -> List[str]:
+    if not rows:
+        return ["（データなし）"]
+    lines: List[str] = []
+    for i, row in enumerate(rows, 1):
+        if value_label == "PV":
+            value = fmt_int(row.page_views)
+        else:
+            value = fmt_int(row.sessions)
+        lines.append(f"{i}. `{short_path(row.label)}` — {value_label} {value}")
+    return lines
+
+
+def _ranked_channel_bullets(rows: List[RankedRow]) -> List[str]:
+    if not rows:
+        return ["（データなし）"]
+    return [
+        fmt_rank_bullet(i, row.label, [f"SS {fmt_int(row.sessions)}"])
+        for i, row in enumerate(rows, 1)
+    ]
 
 
 def build_reply_idea_detail(report: DailyKpiReport) -> str:
@@ -185,36 +260,18 @@ def build_reply_idea_detail(report: DailyKpiReport) -> str:
         "*📖 moodmarkgift（IDEA）コンテンツ詳細*",
         "",
         f"セッション: *{fmt_int(idea.sessions)}* · PV: *{fmt_int(idea.page_views)}* · "
-        f"直帰率: {fmt_pct(idea.bounce_rate * 100 if idea.bounce_rate <= 1 else idea.bounce_rate)} · "
+        f"直帰率: {_bounce_rate_fmt(idea.bounce_rate)} · "
         f"滞在: {fmt_duration(idea.avg_session_duration)}",
         "",
         "*記事 PV Top5*",
+        *_ranked_page_bullets(report.idea_top_pages, value_label="PV"),
         "",
-        "| ページ | PV |",
-        "| --- | ---: |",
+        "*ランディング Top5*",
+        *_ranked_page_bullets(report.idea_top_landings, value_label="SS"),
+        "",
+        "*流入チャネル Top5*",
+        *_ranked_channel_bullets(report.idea_channels),
     ]
-    if report.idea_top_pages:
-        for row in report.idea_top_pages:
-            lines.append(f"| `{row.label}` | {fmt_int(row.page_views)} |")
-    else:
-        lines.append("| — | — |")
-
-    lines.extend(["", "*ランディング Top5*", "", "| LP | SS |", "| --- | ---: |"])
-    if report.idea_top_landings:
-        for row in report.idea_top_landings:
-            lines.append(f"| `{row.label}` | {fmt_int(row.sessions)} |")
-    else:
-        lines.append("| — | — |")
-
-    lines.extend(
-        ["", "*流入チャネル Top5*", "", "| チャネル | SS |", "| --- | ---: |"]
-    )
-    if report.idea_channels:
-        for row in report.idea_channels:
-            lines.append(f"| {row.label} | {fmt_int(row.sessions)} |")
-    else:
-        lines.append("| — | — |")
-
     return "\n".join(lines)
 
 

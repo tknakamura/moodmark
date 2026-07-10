@@ -17,6 +17,8 @@ GA4 の **前々日** KPI を毎朝 **09:00 JST** に Slack へ配信する Bot 
 **対象日**: 前々日（JST）  
 **比較**: 前週同曜日（WoW）
 
+Slack では Markdown 表が崩れるため、詳細は **箇条書き形式** で配信します。
+
 ## Slack チャンネル
 
 - 通知先: [kikinews #C011BDFHN7N](https://kikinews.slack.com/archives/C011BDFHN7N)

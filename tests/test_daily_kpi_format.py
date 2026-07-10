@@ -10,8 +10,10 @@ from tools.daily_kpi.format_slack import (
     build_reply_alerts,
     build_reply_overview,
     build_slack_messages,
+    fmt_metric_bullet,
     fmt_wow_short,
     fmt_yen,
+    short_path,
 )
 from tools.daily_kpi.ga4_collector import (
     DailyKpiReport,
@@ -38,6 +40,20 @@ def test_fmt_wow_short():
 def test_fmt_yen():
     assert fmt_yen(10_500_000) == "¥10.5M"
     assert fmt_yen(50_000) == "¥5.0万"
+
+
+def test_fmt_metric_bullet():
+    line = fmt_metric_bullet("SS", 25550, 24980)
+    assert line.startswith("• SS:")
+    assert "*25,550*" in line
+    assert "前週 24,980" in line
+    assert "WoW +2.3%" in line
+
+
+def test_short_path():
+    long = "/moodmarkgift/" + "a" * 60
+    assert short_path(long, max_len=48).endswith("…")
+    assert len(short_path(long, max_len=48)) == 48
 
 
 def test_get_report_dates():
@@ -87,6 +103,41 @@ def test_build_slack_messages_structure():
     assert "example.com/run/1" in replies[3]
 
 
+def test_no_markdown_tables_in_replies():
+    report = DailyKpiReport(
+        report_date=date(2026, 7, 10),
+        compare_date=date(2026, 7, 3),
+        moodmark=SiteDayMetrics(sessions=1000, purchases=10, purchase_revenue=50000),
+        moodmarkgift=SiteDayMetrics(sessions=2000, page_views=5000),
+        ec_devices=[RankedRow(label="mobile", sessions=800, purchases=8, purchase_revenue=40000)],
+        ec_channels=[RankedRow(label="Organic Search", sessions=600, purchases=5, purchase_revenue=30000)],
+        idea_top_pages=[RankedRow(label="/moodmarkgift/article/", page_views=1000)],
+        idea_top_landings=[RankedRow(label="/moodmarkgift/", sessions=500)],
+        idea_channels=[RankedRow(label="Organic Search", sessions=1500)],
+    )
+    _, replies = build_slack_messages(report)
+    for reply in replies:
+        assert "| ---" not in reply
+        assert "| 指標 |" not in reply
+        assert "| 項目 |" not in reply
+
+
+def test_overview_uses_metric_bullets():
+    report = DailyKpiReport(
+        report_date=date(2026, 7, 10),
+        compare_date=date(2026, 7, 3),
+        moodmark=SiteDayMetrics(sessions=1000),
+        moodmark_compare=SiteDayMetrics(sessions=900),
+        moodmarkgift=SiteDayMetrics(sessions=2000),
+        moodmarkgift_compare=SiteDayMetrics(sessions=1800),
+    )
+    text = build_reply_overview(report)
+    assert "*EC*" in text
+    assert "*IDEA*" in text
+    assert "• SS:" in text
+    assert "*合算*" in text
+
+
 def test_build_reply_overview_contains_both_sites():
     report = DailyKpiReport(
         report_date=date(2026, 7, 10),
@@ -99,7 +150,20 @@ def test_build_reply_overview_contains_both_sites():
     text = build_reply_overview(report)
     assert "EC" in text
     assert "IDEA" in text
-    assert "合算 SS" in text
+    assert "合算" in text
+
+
+def test_ec_detail_uses_numbered_rankings():
+    report = DailyKpiReport(
+        report_date=date(2026, 7, 10),
+        compare_date=date(2026, 7, 3),
+        moodmark=SiteDayMetrics(sessions=1000, purchases=10, purchase_revenue=50000),
+        ec_devices=[RankedRow(label="mobile", sessions=800, purchases=8, purchase_revenue=40000)],
+    )
+    _, replies = build_slack_messages(report)
+    ec_detail = replies[1]
+    assert "1. mobile —" in ec_detail
+    assert "SS 800" in ec_detail
 
 
 def test_build_reply_alerts_no_issues():
