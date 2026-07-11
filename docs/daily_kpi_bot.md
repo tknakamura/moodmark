@@ -88,6 +88,7 @@ tools/slack_client.py # Slack Web API 共通
 |------|-----------|------|
 | EC 購入数 | `ecommercePurchases` | landingPage ベースで moodmark EC のみ |
 | EC 売上 | `purchaseRevenue` | 同上 |
+| EC 直帰率・滞在 | `bounceRate`, `averageSessionDuration` | サイト全体平均（`date` 次元のみ。LP 別の単純平均は使わない） |
 | Purchase CVR | 購入数 ÷ セッション | `conversions` は使わない |
 | IDEA セッション | `sessions` | `/moodmarkgift` フィルタ |
 

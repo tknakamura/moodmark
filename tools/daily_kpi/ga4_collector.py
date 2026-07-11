@@ -124,6 +124,36 @@ def _metrics_from_summary_df(df: pd.DataFrame) -> SiteDayMetrics:
     )
 
 
+def _metrics_from_landing_df(df: pd.DataFrame) -> SiteDayMetrics:
+    """landingPage 集計分（購入・SS 等）。直帰率・滞在は含めない。"""
+    return SiteDayMetrics(
+        sessions=_safe_sum(df, "sessions"),
+        active_users=_safe_sum(df, "activeUsers"),
+        page_views=_safe_sum(df, "screenPageViews"),
+        purchases=_safe_sum(df, "ecommercePurchases"),
+        purchase_revenue=_safe_sum(df, "purchaseRevenue"),
+    )
+
+
+def _fetch_engagement_metrics(
+    api: GoogleAPIsIntegration,
+    day: date,
+    site_name: str,
+) -> tuple[float, float]:
+    """サイト全体の平均直帰率・平均セッション時間（date 次元のみ）。"""
+    ds = _date_str(day)
+    df = api.get_ga4_data_custom_range(
+        ds,
+        ds,
+        metrics=["bounceRate", "averageSessionDuration"],
+        dimensions=["date"],
+        site_name=site_name,
+    )
+    if df.empty:
+        return 0.0, 0.0
+    return _safe_mean(df, "bounceRate"), _safe_mean(df, "averageSessionDuration")
+
+
 def _fetch_site_summary(
     api: GoogleAPIsIntegration,
     day: date,
@@ -156,7 +186,7 @@ def _fetch_ec_purchase_landing(
     api: GoogleAPIsIntegration,
     day: date,
 ) -> SiteDayMetrics:
-    """EC 購入 KPI（landingPage ベース、analyze_7days_purchase_only と同方式）。"""
+    """EC 購入 KPI（landingPage ベース）+ 直帰率・滞在（サイト全体平均）。"""
     ds = _date_str(day)
     df = api.get_ga4_data_custom_range(
         ds,
@@ -165,8 +195,6 @@ def _fetch_ec_purchase_landing(
             "sessions",
             "activeUsers",
             "screenPageViews",
-            "bounceRate",
-            "averageSessionDuration",
             "ecommercePurchases",
             "purchaseRevenue",
         ],
@@ -174,22 +202,26 @@ def _fetch_ec_purchase_landing(
         site_name="moodmark",
     )
     if df.empty:
-        return SiteDayMetrics()
+        bounce, duration = _fetch_engagement_metrics(api, day, "moodmark")
+        return SiteDayMetrics(bounce_rate=bounce, avg_session_duration=duration)
     ec = df[df["landingPage"].apply(_is_moodmark_ec_path)]
     if ec.empty:
-        return SiteDayMetrics()
+        bounce, duration = _fetch_engagement_metrics(api, day, "moodmark")
+        return SiteDayMetrics(bounce_rate=bounce, avg_session_duration=duration)
     grouped = ec.groupby("date", as_index=False).agg(
         {
             "sessions": "sum",
             "activeUsers": "sum",
             "screenPageViews": "sum",
-            "bounceRate": "mean",
-            "averageSessionDuration": "mean",
             "ecommercePurchases": "sum",
             "purchaseRevenue": "sum",
         }
     )
-    return _metrics_from_summary_df(grouped)
+    metrics = _metrics_from_landing_df(grouped)
+    bounce, duration = _fetch_engagement_metrics(api, day, "moodmark")
+    metrics.bounce_rate = bounce
+    metrics.avg_session_duration = duration
+    return metrics
 
 
 def _fetch_ec_breakdown(
