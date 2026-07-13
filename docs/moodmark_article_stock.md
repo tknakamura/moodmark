@@ -12,17 +12,21 @@ Streamlit ダッシュボードのページ **`/article_stock`**（[pages/articl
 
 ロジックは [tools/moodmark_stock/scraper.py](../tools/moodmark_stock/scraper.py) に集約。
 
-- **記事からの商品URL抽出**: `/moodmark/product/MM-…`（および `MMV-…`）の `href` に加え、**moodmarkgift（IDEA）** 記事で使われる `data-moodmark-product-id="…"` も検出します。在庫チェック用の取得先はいずれも `https://isetan.mistore.jp/moodmark/product/{slug}.html` に正規化されます（静的HTMLに ID が含まれる限り、ヘッドレスは不要なケースが多いです）。
+- **記事からの商品URL抽出**:
+  - 従来: `https://isetan.mistore.jp/moodmark/product/MM-….html` およびパス `/moodmark/product/…`
+  - **ドメイン移管後の EC リンク**: `https://moodmark.mistore.jp/product/MM-….html`（および `MMV-…`、相対 `/product/…`）
+  - moodmarkgift（IDEA）記事の `data-moodmark-product-id="…"`
+  - 在庫チェック用の取得先はいずれも `https://isetan.mistore.jp/moodmark/product/{slug}.html` に正規化（`moodmark.mistore.jp` は同 URL へリダイレクト）
 
 ## ダッシュボードUI（記事管理・在庫実行）
 
-- **記事URLの管理**: 「編集・削除する記事を選択」で記事を切り替えると、下の **URL・ラベル** はその記事の内容に連動して表示されます（記事IDごとに入力状態が保持されます）。
+- **記事URLの管理**: 「編集・削除する記事を選択」で記事を切り替えると、下の **URL・ラベル** はその記事の内容に連動して表示されます（記事IDごとに入力状態が保持されます）。追加・更新した記事は **在庫チェック対象** に自動で含まれます。
 - **タブの描画**: 画面上部のラジオボタンで切り替える **1タブのみ** を描画します（記事の追加・削除時に「結果の表示」タブの重い処理が走らないようにするため）。削除・追加後はウィジェット用 `session_state`（編集対象の選択・在庫チェック対象記事など）を現行の記事一覧に合わせて掃除します。
 - **登録一覧の日時列**: 最終スナップショットの `cache_meta` に基づき、**記事ページ取得(JST)**（`articles[記事URL].fetched_at`＝記事 HTML から掲載商品 URL を取り直した時刻）と **掲載商品在庫の最新(JST)**（当該記事の掲載リストに含まれる商品の `products[商品URL].checked_at` の最大）を表示します。在庫チェック未実行やメタ欠落時は空欄です。
-- **結果の表示・記事別サマリ**: 上記と同じ2列（記事ページ取得 / 掲載商品在庫の最新）を記事ごとに表示します。算出は [snapshot_display.py](../tools/moodmark_stock/snapshot_display.py) の `article_cache_meta_utc_times` に集約しています。
+- **結果の表示・記事別サマリ**: 上記と同じ2列（記事ページ取得 / 掲載商品在庫の最新）を記事ごとに表示します。算出は [snapshot_display.py](../tools/moodmark_stock/snapshot_display.py) の `article_cache_meta_utc_times` に集約しています。登録済みだが最新スナップショットに無い記事はラベルに **（未チェック）** と表示されます。
 - **タイムゾーン**: 画面の日時は **JST（Asia/Tokyo）** で表示します。DB・スナップショット・Slack の保存値は **UTC ISO** のままです。`format_jst` で文字列表示に変換しています。
 - **在庫チェック実行**: 「在庫チェックする記事」の上の **記事候補の検索** で、ラベルまたは URL の**部分一致**（大文字小文字は区別しない）により候補を絞り込めます。候補に出ていない記事はその時点では選べません。全記事を候補に戻すときは検索を空にしてください。候補や検索語を変えたとき、選択内容がリセットされることがあります。
-
+- **CONNECTING / 長い HTML 画面**: Render 上でインスタンス再起動（多くはメモリ上限超過）が起きると、Streamlit が切断されエラーページの HTML がそのまま表示されることがあります。記事の **追加自体は DB に残っている** ことが多いので、再読込後に「在庫チェック実行」で当該記事だけ選んで再実行してください。
 ## データの保存（PostgreSQL 推奨）
 
 永続層は [tools/moodmark_stock/store.py](../tools/moodmark_stock/store.py) が担当します。

@@ -33,12 +33,23 @@ DEFAULT_UA = (
 
 # MM-123（従来）および MMV-0415385006491 形式など
 _PRODUCT_SLUG = r"(?:MM-\d+|MMV-[A-Za-z0-9]+)"
+# 在庫取得・結果表示の正規化先（商品詳細の soldout DOM が載るホスト）
+CANONICAL_PRODUCT_HOST = "https://isetan.mistore.jp/moodmark/product"
 PRODUCT_PATH_RE = re.compile(
     rf"/moodmark/product/({_PRODUCT_SLUG})\.html",
     re.IGNORECASE,
 )
+# ドメイン移管後の EC 商品URL（moodmarkgift 記事の href）
+SHORT_PRODUCT_PATH_RE = re.compile(
+    rf"/product/({_PRODUCT_SLUG})\.html",
+    re.IGNORECASE,
+)
 ABS_PRODUCT_RE = re.compile(
     rf"https://isetan\.mistore\.jp/moodmark/product/({_PRODUCT_SLUG})\.html",
+    re.IGNORECASE,
+)
+ABS_MOODMARK_HOST_PRODUCT_RE = re.compile(
+    rf"https://moodmark\.mistore\.jp/product/({_PRODUCT_SLUG})\.html",
     re.IGNORECASE,
 )
 # moodmarkgift（IDEA）記事など: href ではなく data 属性で商品IDのみ載せるケース
@@ -48,16 +59,24 @@ DATA_MOODMARK_PRODUCT_ID_RE = re.compile(
 )
 
 
+def _canonical_from_slug(slug: str) -> str:
+    return f"{CANONICAL_PRODUCT_HOST}/{slug}.html"
+
+
 def canonical_product_url(url_or_path: str) -> Optional[str]:
     if not url_or_path:
         return None
     s = url_or_path.strip()
-    m = ABS_PRODUCT_RE.search(s)
-    if m:
-        return f"https://isetan.mistore.jp/moodmark/product/{m.group(1)}.html"
-    m = PRODUCT_PATH_RE.search(s)
-    if m:
-        return f"https://isetan.mistore.jp/moodmark/product/{m.group(1)}.html"
+    for pattern in (ABS_PRODUCT_RE, ABS_MOODMARK_HOST_PRODUCT_RE, PRODUCT_PATH_RE):
+        m = pattern.search(s)
+        if m:
+            return _canonical_from_slug(m.group(1))
+    # /product/MM-….html（/moodmark/ 無し）は新ホスト用。誤検知を避けるため
+    # 絶対URLに /moodmark/product/ が無い場合のみ採用する。
+    if "/moodmark/product/" not in s.lower():
+        m = SHORT_PRODUCT_PATH_RE.search(s)
+        if m:
+            return _canonical_from_slug(m.group(1))
     return None
 
 
@@ -78,14 +97,18 @@ def product_slug_for_ga4_item_id(url_or_path: str) -> Optional[str]:
         path = urlparse(s).path if s.startswith("http") else s
     except Exception:
         path = s
-    m = PRODUCT_PATH_RE.search(path or "")
-    return m.group(1) if m else None
+    for pattern in (PRODUCT_PATH_RE, SHORT_PRODUCT_PATH_RE):
+        m = pattern.search(path or "")
+        if m:
+            return m.group(1)
+    return None
 
 
 def extract_product_urls_from_html(html: str, base_url: str = "") -> List[str]:
     """
     記事HTMLから商品 canonical URL 一覧を返す。
-    - /moodmark/product/*.html のリンク
+    - /moodmark/product/*.html および isetan 絶対URL（従来）
+    - moodmark.mistore.jp/product/*.html（ドメイン移管後の EC リンク）
     - data-moodmark-product-id（moodmarkgift 記事で使用）から組み立てた同一 canonical
     """
     seen: set = set()
@@ -99,19 +122,33 @@ def extract_product_urls_from_html(html: str, base_url: str = "") -> List[str]:
             seen.add(c)
             out.append(c)
 
-    for m in ABS_PRODUCT_RE.finditer(html or ""):
+    text = html or ""
+    for m in ABS_PRODUCT_RE.finditer(text):
+        add(m.group(0))
+    for m in ABS_MOODMARK_HOST_PRODUCT_RE.finditer(text):
         add(m.group(0))
 
-    for m in PRODUCT_PATH_RE.finditer(html or ""):
+    for m in PRODUCT_PATH_RE.finditer(text):
         path = m.group(0)
         if base_url:
             add(urljoin(base_url, path))
         else:
             add(f"https://isetan.mistore.jp{path}")
 
-    for m in DATA_MOODMARK_PRODUCT_ID_RE.finditer(html or ""):
-        slug = m.group(1)
-        add(f"https://isetan.mistore.jp/moodmark/product/{slug}.html")
+    # /product/MM-….html は /moodmark/product/ と二重マッチしないよう、
+    # マッチ位置の直前が /moodmark でないものだけ拾う
+    for m in SHORT_PRODUCT_PATH_RE.finditer(text):
+        start = m.start()
+        if start >= len("/moodmark") and text[start - len("/moodmark") : start].lower() == "/moodmark":
+            continue
+        path = m.group(0)
+        if base_url:
+            add(urljoin(base_url, path))
+        else:
+            add(_canonical_from_slug(m.group(1)))
+
+    for m in DATA_MOODMARK_PRODUCT_ID_RE.finditer(text):
+        add(_canonical_from_slug(m.group(1)))
 
     return out
 

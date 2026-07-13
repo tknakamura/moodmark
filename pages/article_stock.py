@@ -282,15 +282,21 @@ def _get_state():
     return st.session_state.ams_state
 
 
-def _sync_article_ga4_pageviews(store, article_id: str, article_url: str) -> None:
+def _sync_article_ga4_pageviews(
+    store, article_id: str, article_url: str
+) -> Optional[str]:
+    """
+    GA4 PV を取得して記事に保存する。
+    戻り値: 成功時 None、スキップ/失敗時はユーザー向け短いメッセージ。
+    """
     try:
         from analytics.google_apis_integration import GoogleAPIsIntegration
     except ImportError:
         logger.warning("GoogleAPIsIntegration をインポートできません")
-        return
+        return "GA4連携モジュールを読み込めませんでした"
     api = GoogleAPIsIntegration()
     if not api.ga4_service or not api.ga4_property_id:
-        return
+        return "GA4未設定のため表示回数は取得しませんでした"
     path = (urlparse(article_url).path or "").strip() or "/"
     fetched_at = datetime.now(timezone.utc)
     try:
@@ -300,6 +306,7 @@ def _sync_article_ga4_pageviews(store, article_id: str, article_url: str) -> Non
             fetched_at,
             pageviews=pv,
         )
+        return None
     except Exception as e:
         logger.warning("記事GA4 PV取得エラー (%s): %s", article_url, e)
         store.set_article_ga4_pageviews(
@@ -307,6 +314,7 @@ def _sync_article_ga4_pageviews(store, article_id: str, article_url: str) -> Non
             fetched_at,
             error=str(e)[:512],
         )
+        return f"GA4表示回数の取得に失敗しました: {e}"
 
 
 def _article_edit_key_suffix(article_id: str) -> str:
@@ -324,7 +332,11 @@ def _prune_stale_article_edit_keys(valid_article_ids: Set[str]) -> None:
                 break
 
 
-def _sync_article_widget_state(articles: List[Dict[str, Any]]) -> None:
+def _sync_article_widget_state(
+    articles: List[Dict[str, Any]],
+    *,
+    ensure_urls_in_scope: Optional[List[str]] = None,
+) -> None:
     """selectbox / multiselect の選択値を現行記事リストに合わせる。"""
     valid_ids = {a["id"] for a in articles}
     valid_urls = {
@@ -339,16 +351,37 @@ def _sync_article_widget_state(articles: List[Dict[str, Any]]) -> None:
     if pick is not None and pick not in opts_keys:
         st.session_state.pop("ams_edit_pick", None)
     if "ams_article_scope" in st.session_state:
-        st.session_state.ams_article_scope = [
+        kept = [
             u for u in st.session_state.ams_article_scope if u in valid_urls
         ]
+        if ensure_urls_in_scope:
+            for u in ensure_urls_in_scope:
+                uu = (u or "").strip()
+                if uu in valid_urls and uu not in kept:
+                    kept.append(uu)
+        st.session_state.ams_article_scope = kept
+    elif ensure_urls_in_scope:
+        # まだ scope が無い場合でも、追加直後はチェック対象に入れておく
+        seed = [
+            (u or "").strip()
+            for u in ensure_urls_in_scope
+            if (u or "").strip() in valid_urls
+        ]
+        if seed:
+            st.session_state.ams_article_scope = seed
     _prune_stale_article_edit_keys(valid_ids)
 
 
-def _after_article_list_mutation(*, removed_article_id: Optional[str] = None) -> None:
+def _after_article_list_mutation(
+    *,
+    removed_article_id: Optional[str] = None,
+    ensure_urls_in_scope: Optional[List[str]] = None,
+) -> None:
     _invalidate_state_cache()
     articles = get_store().load_state().get("articles") or []
-    _sync_article_widget_state(articles)
+    _sync_article_widget_state(
+        articles, ensure_urls_in_scope=ensure_urls_in_scope
+    )
     if removed_article_id:
         suffix = _article_edit_key_suffix(removed_article_id)
         st.session_state.pop(f"ams_edit_url_{suffix}", None)
@@ -421,6 +454,15 @@ active_tab = st.radio(
 )
 
 if active_tab == _TAB_MANAGE:
+    flash = st.session_state.pop("ams_manage_flash", None)
+    if isinstance(flash, dict):
+        if flash.get("success"):
+            st.success(flash["success"])
+        if flash.get("warning"):
+            st.warning(flash["warning"])
+        if flash.get("caption"):
+            st.caption(flash["caption"])
+
     st.subheader("記事URLの登録")
     c1, c2 = st.columns([3, 1])
     with c1:
@@ -444,12 +486,24 @@ if active_tab == _TAB_MANAGE:
                 (a for a in fresh.get("articles", []) if a.get("url") == nu),
                 None,
             )
+            ga4_msg = None
             if art:
                 with st.spinner("GA4から表示回数を取得中…"):
-                    _sync_article_ga4_pageviews(store, art["id"], art["url"])
+                    ga4_msg = _sync_article_ga4_pageviews(
+                        store, art["id"], art["url"]
+                    )
             _invalidate_state_cache()
-            st.success("追加しました")
-            _after_article_list_mutation()
+            st.session_state.ams_manage_flash = {
+                "success": "追加しました",
+                "warning": ga4_msg,
+                "caption": (
+                    "接続が切れた場合（CONNECTING / 長いHTML画面）でも記事登録自体は残っていることがあります。"
+                    " 再読込後、「在庫チェック実行」で当該記事を選んで実行してください。"
+                ),
+            }
+            _after_article_list_mutation(
+                ensure_urls_in_scope=[nu] if nu else None
+            )
             st.rerun()
 
     st.subheader("登録一覧")
@@ -542,14 +596,22 @@ if active_tab == _TAB_MANAGE:
                         (a for a in fresh.get("articles", []) if a.get("id") == aid),
                         None,
                     )
+                    ga4_msg = None
+                    nu = None
                     if art:
+                        nu = (art.get("url") or "").strip()
                         with st.spinner("GA4から表示回数を取得中…"):
-                            _sync_article_ga4_pageviews(
-                                store, aid, art.get("url", "")
+                            ga4_msg = _sync_article_ga4_pageviews(
+                                store, aid, nu
                             )
                     _invalidate_state_cache()
-                    st.success("更新しました")
-                    _after_article_list_mutation()
+                    st.session_state.ams_manage_flash = {
+                        "success": "更新しました",
+                        "warning": ga4_msg,
+                    }
+                    _after_article_list_mutation(
+                        ensure_urls_in_scope=[nu] if nu else None
+                    )
                     st.rerun()
         with c2:
             if st.button("削除", key="ams_rm"):
@@ -842,17 +904,26 @@ elif active_tab == _TAB_VIEW:
                 " いずれも JST 表示（保存は UTC）。未実行・メタなしは空欄。"
             )
             product_stock = snap.get("product_stock") or {}
+            # 登録済みだがスナップショット未収録の記事も「未チェック」として出す
+            for u in sorted(reg_urls):
+                if u not in article_to_products:
+                    article_to_products[u] = []
             summary_rows = []
+            unchecked_n = 0
             for aurl, plist in article_to_products.items():
                 art = next(
                     (x for x in state.get("articles", []) if x.get("url") == aurl),
                     None,
                 )
                 label = (art or {}).get("label") or aurl
-                n = len(plist)
+                in_snap = aurl in atp_full
+                if not in_snap:
+                    unchecked_n += 1
+                    label = f"{label}（未チェック）"
+                n = len(plist) if isinstance(plist, list) else 0
                 bad = sum(
                     1
-                    for p in plist
+                    for p in (plist or [])
                     if product_stock.get(p, {}).get("status") != "in_stock"
                 )
                 pv7 = None
@@ -873,7 +944,13 @@ elif active_tab == _TAB_VIEW:
                         "PV(7日)": pv7,
                         "_art_fetch_dt": art_fetch_dt,
                         "_prod_latest_dt": prod_latest_dt,
+                        "_unchecked": not in_snap,
                     }
+                )
+            if unchecked_n:
+                st.warning(
+                    f"登録済みだが最新スナップショットに無い記事が **{unchecked_n}** 件あります"
+                    "（ラベルに「未チェック」）。「在庫チェック実行」で当該記事を選んで実行してください。"
                 )
             if not summary_rows:
                 st.info("記事別の集計データがありません。")
