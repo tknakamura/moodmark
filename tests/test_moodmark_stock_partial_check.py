@@ -105,6 +105,75 @@ class TestPartialStockCheck(unittest.TestCase):
         self.assertTrue(all("article-a" in u for u in fetched_urls))
         self.assertFalse(any("article-b" in u for u in fetched_urls))
 
+    @patch(
+        "tools.moodmark_stock.scraper._fetch_one_product",
+        side_effect=_mock_fetch_product,
+    )
+    @patch(
+        "tools.moodmark_stock.scraper._fetch_one_article",
+        side_effect=_mock_fetch_article,
+    )
+    def test_partial_force_full_does_not_refetch_out_of_scope_products(
+        self, mock_article, mock_product
+    ):
+        """部分+強制フルでも、未選択記事の商品は再GETしない（OOM防止）。"""
+        prev = {
+            "run_at": "2020-01-01T00:00:00+00:00",
+            "article_to_products": {
+                _UA: [_MU1],
+                _UB: [_MU2],
+            },
+            "cache_meta": {
+                "articles": {
+                    _UA: {
+                        "fetched_at": "2020-01-01T00:00:00+00:00",
+                        "products": [_MU1],
+                    },
+                    _UB: {
+                        "fetched_at": "2020-01-01T00:00:00+00:00",
+                        "products": [_MU2],
+                    },
+                },
+                "products": {
+                    _MU1: {
+                        "checked_at": "2020-01-01T00:00:00+00:00",
+                        "status": "in_stock",
+                        "label": "",
+                        "raw_main": "",
+                        "raw_sub": "",
+                        "error": None,
+                        "product_name": "",
+                    },
+                    _MU2: {
+                        "checked_at": "2020-01-01T00:00:00+00:00",
+                        "status": "restock_wait",
+                        "label": "待ち",
+                        "raw_main": "",
+                        "raw_sub": "",
+                        "error": None,
+                        "product_name": "B",
+                    },
+                },
+            },
+        }
+        articles = [
+            {"url": _UA, "label": "A"},
+            {"url": _UB, "label": "B"},
+        ]
+        snap = run_stock_check(
+            articles,
+            previous_snapshot=prev,
+            only_check_article_urls=[_UA],
+            force_full_refresh=True,
+            cache_ttl_hours=8760.0,
+            request_delay_s=0.0,
+        )
+        fetched_products = [c.args[0] for c in mock_product.call_args_list]
+        self.assertEqual(fetched_products, [_MU1])
+        self.assertEqual(
+            snap["product_stock"][_MU2].get("status"), "restock_wait"
+        )
+        self.assertEqual(snap["run_stats"].get("products_fetched"), 1)
 
 if __name__ == "__main__":
     unittest.main()

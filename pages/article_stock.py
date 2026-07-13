@@ -635,18 +635,20 @@ elif active_tab == _TAB_RUN:
             key="ams_ttl",
         )
         force_full = st.checkbox(
-            "強制フルチェック（キャッシュを使わず全件GET）", key="ams_force"
+            "強制フルチェック（選択記事のキャッシュを使わず再GET）",
+            key="ams_force",
+            help="部分選択時は、選んだ記事とその掲載商品だけを再取得します（他記事の全SKUは再取得しません）。",
         )
         fetch_ga4_commerce = st.checkbox(
             "GA4で商品名（itemName）・購入数・収益を取得",
-            value=True,
+            value=False,
             key="ams_ga4_commerce",
-            help="期間は記事のPV(7日)と同じ（終端3日前から遡る7日）。purchase 由来の指標です。",
+            help="期間は記事のPV(7日)と同じ（終端3日前から遡る7日）。purchase 由来の指標です。メモリ節約のため既定OFF。",
         )
     with c2:
-        w_art = st.slider("記事ページ取得の同時接続数", 1, 16, 3, key="ams_wa")
-        w_prd = st.slider("商品ページ取得の同時接続数", 1, 32, 6, key="ams_wp")
-    delay = st.slider(
+        w_art = st.slider("記事ページ取得の同時接続数", 1, 16, 2, key="ams_wa")
+        w_prd = st.slider("商品ページ取得の同時接続数", 1, 32, 3, key="ams_wp")
+        st.caption("同時接続を上げると速いですが、Render のメモリ上限で再起動しやすくなります。")    delay = st.slider(
         "各ワーカーのリクエスト前待機（秒）",
         0.0,
         1.5,

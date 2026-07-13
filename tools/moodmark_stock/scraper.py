@@ -13,6 +13,7 @@ MOO:D MARK 記事・商品ページのスクレイピング。
 
 from __future__ import annotations
 
+import gc
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -193,24 +194,27 @@ def _parse_iso(ts: str) -> Optional[datetime]:
         return None
 
 
-def parse_product_name_from_html(html: str) -> str:
+def _strip_site_suffix(t: str) -> str:
+    t = (t or "").strip()
+    for sep in (" | ", " ｜ ", "|", "｜", " - ", " – "):
+        if sep in t:
+            left = t.split(sep, 1)[0].strip()
+            if len(left) >= 2:
+                return left[:500]
+    return t[:500] if t else ""
+
+
+def parse_product_name_from_html(
+    html: str, *, soup: Optional[BeautifulSoup] = None
+) -> str:
     """
     商品ページHTMLから商品名を推定。
     h1.name 直下の span（brand / keyword 以外）→ og:title → twitter:title → h1 全文 → title。
     """
-    if not html:
-        return ""
-
-    def strip_site_suffix(t: str) -> str:
-        t = (t or "").strip()
-        for sep in (" | ", " ｜ ", "|", "｜", " - ", " – "):
-            if sep in t:
-                left = t.split(sep, 1)[0].strip()
-                if len(left) >= 2:
-                    return left[:500]
-        return t[:500] if t else ""
-
-    soup = BeautifulSoup(html, "lxml")
+    if soup is None:
+        if not html:
+            return ""
+        soup = BeautifulSoup(html, "lxml")
     # 画面表示の商品名（例: <h1 class="name"><span class="brand">…</span><span>商品名</span><span class="keyword">…</span>）
     h1_name = soup.find("h1", class_="name")
     if h1_name:
@@ -224,12 +228,12 @@ def parse_product_name_from_html(html: str) -> str:
 
     og = soup.find("meta", attrs={"property": "og:title"})
     if og and og.get("content"):
-        c = strip_site_suffix(str(og["content"]))
+        c = _strip_site_suffix(str(og["content"]))
         if c:
             return c
     tw = soup.find("meta", attrs={"name": "twitter:title"})
     if tw and tw.get("content"):
-        c = strip_site_suffix(str(tw["content"]))
+        c = _strip_site_suffix(str(tw["content"]))
         if c:
             return c
     h1 = soup.find("h1")
@@ -237,7 +241,7 @@ def parse_product_name_from_html(html: str) -> str:
         return h1.get_text(" ", strip=True)[:500]
     title = soup.find("title")
     if title:
-        return strip_site_suffix(title.get_text(strip=True))
+        return _strip_site_suffix(title.get_text(strip=True))
     return ""
 
 
@@ -250,15 +254,18 @@ def _is_within_ttl(checked_at: str, ttl_hours: float, now: datetime) -> bool:
     return (now - t).total_seconds() < ttl_hours * 3600
 
 
-def parse_stock_from_html(html: str) -> Dict[str, Any]:
-    if not html:
-        return {
-            "status": "parse_error",
-            "label": "取得失敗",
-            "raw_main": "",
-            "raw_sub": "",
-        }
-    soup = BeautifulSoup(html, "lxml")
+def parse_stock_from_html(
+    html: str, *, soup: Optional[BeautifulSoup] = None
+) -> Dict[str, Any]:
+    if soup is None:
+        if not html:
+            return {
+                "status": "parse_error",
+                "label": "取得失敗",
+                "raw_main": "",
+                "raw_sub": "",
+            }
+        soup = BeautifulSoup(html, "lxml")
     sold = soup.select_one("div.btn-cart.soldout")
     if not sold:
         sold = soup.select_one("div.soldout.btn-cart")
@@ -355,9 +362,16 @@ def _fetch_one_product(purl: str, delay_s: float):
             "error": err,
             "product_name": "",
         }
-    info = parse_stock_from_html(html or "")
-    info["product_name"] = parse_product_name_from_html(html or "")
-    info["error"] = info.get("error")
+    # 同一 HTML を二重に BeautifulSoup しない（メモリピーク抑制）
+    soup = BeautifulSoup(html or "", "lxml")
+    try:
+        info = parse_stock_from_html(html or "", soup=soup)
+        info["product_name"] = parse_product_name_from_html(html or "", soup=soup)
+        info["error"] = info.get("error")
+    finally:
+        soup.decompose()
+        del soup
+        del html
     return purl, info
 
 
@@ -384,8 +398,9 @@ def run_stock_check(
     now = datetime.now(timezone.utc)
     run_at = now.isoformat()
 
+    # force_full でも対象外記事の商品キャッシュは再利用する（部分チェック時の OOM 防止）
     cm_prev: Dict[str, Any] = {}
-    if previous_snapshot and not force_full_refresh:
+    if previous_snapshot:
         cm_prev = deepcopy(previous_snapshot.get("cache_meta") or {})
     articles_cached = cm_prev.get("articles") or {}
     products_cached = cm_prev.get("products") or {}
@@ -493,6 +508,7 @@ def run_stock_check(
                             }
                         )
                 prog_article(f"記事: {aurl}")
+        gc.collect()
 
     all_products_order: List[str] = []
     seen_p: set = set()
@@ -502,10 +518,38 @@ def run_stock_check(
                 seen_p.add(p)
                 all_products_order.append(p)
 
+    # 今回スコープの記事に載る商品だけ再取得対象（部分+強制フルで全SKU再取得しない）
+    products_in_scope: set = set()
+    for aurl in all_article_urls:
+        if not _article_in_refresh_scope(aurl):
+            continue
+        for p in article_to_products.get(aurl, []):
+            if isinstance(p, str) and p:
+                products_in_scope.add(p)
+
     product_stock: Dict[str, Dict[str, Any]] = {}
     need_product_fetch: List[str] = []
 
+    def _stock_from_cache(pent: Dict[str, Any]) -> Dict[str, Any]:
+        stock = {k: v for k, v in pent.items() if k not in ("checked_at",)}
+        stock.setdefault("product_name", "")
+        return stock
+
     for purl in all_products_order:
+        if purl not in products_in_scope:
+            pent = products_cached.get(purl)
+            if pent and isinstance(pent, dict):
+                product_stock[purl] = _stock_from_cache(pent)
+            else:
+                product_stock[purl] = {
+                    "status": "unknown",
+                    "label": "未取得",
+                    "raw_main": "",
+                    "raw_sub": "",
+                    "error": None,
+                    "product_name": "",
+                }
+            continue
         if force_full_refresh:
             need_product_fetch.append(purl)
             continue
@@ -513,13 +557,7 @@ def run_stock_check(
         if pent and isinstance(pent, dict) and _is_within_ttl(
             str(pent.get("checked_at") or ""), cache_ttl_hours, now
         ):
-            stock = {
-                k: v
-                for k, v in pent.items()
-                if k not in ("checked_at",)
-            }
-            stock.setdefault("product_name", "")
-            product_stock[purl] = stock
+            product_stock[purl] = _stock_from_cache(pent)
         else:
             need_product_fetch.append(purl)
 
@@ -535,18 +573,22 @@ def run_stock_check(
 
     mp = max(1, min(max_product_workers, 48))
     if need_product_fetch:
-        with ThreadPoolExecutor(max_workers=mp) as ex:
-            futs = {
-                ex.submit(_fetch_one_product, u, request_delay_s): u
-                for u in need_product_fetch
-            }
-            for fut in as_completed(futs):
-                purl, info = fut.result()
-                product_stock[purl] = info
-                if info.get("status") == "fetch_error":
-                    product_fetch_errors.add(purl)
-                prog_product(f"在庫: {purl}")
-
+        # バッチ実行で同時に保持する HTML/Soup を抑える
+        batch_size = max(mp * 2, mp)
+        for i in range(0, len(need_product_fetch), batch_size):
+            chunk = need_product_fetch[i : i + batch_size]
+            with ThreadPoolExecutor(max_workers=mp) as ex:
+                futs = {
+                    ex.submit(_fetch_one_product, u, request_delay_s): u
+                    for u in chunk
+                }
+                for fut in as_completed(futs):
+                    purl, info = fut.result()
+                    product_stock[purl] = info
+                    if info.get("status") == "fetch_error":
+                        product_fetch_errors.add(purl)
+                    prog_product(f"在庫: {purl}")
+            gc.collect()
     art_by_url = {a.get("url", "").strip(): a for a in articles}
     product_to_articles: Dict[str, List[Dict[str, str]]] = {
         p: [] for p in all_products_order
