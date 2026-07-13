@@ -648,7 +648,8 @@ elif active_tab == _TAB_RUN:
     with c2:
         w_art = st.slider("記事ページ取得の同時接続数", 1, 16, 2, key="ams_wa")
         w_prd = st.slider("商品ページ取得の同時接続数", 1, 32, 3, key="ams_wp")
-        st.caption("同時接続を上げると速いですが、Render のメモリ上限で再起動しやすくなります。")    delay = st.slider(
+        st.caption("同時接続を上げると速いですが、Render のメモリ上限で再起動しやすくなります。")
+    delay = st.slider(
         "各ワーカーのリクエスト前待機（秒）",
         0.0,
         1.5,
