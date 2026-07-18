@@ -9,13 +9,13 @@ GA4 の **前々日** KPI を毎朝 **09:00 JST** に Slack へ配信する Bot 
 | 投稿 | 内容 |
 |------|------|
 | **親メッセージ** | `MOO:D MARK Daily KPI（mm/dd）` + EC 購入サマリ + IDEA セッション |
-| **返信 1** | サイト横断 WoW 比較表（EC / IDEA） |
+| **返信 1** | サイト横断の前年同曜日比較（EC / IDEA） |
 | **返信 2** | moodmark（EC）購買・デバイス・チャネル |
 | **返信 3** | moodmarkgift（IDEA）記事 PV / LP / チャネル Top5 |
 | **返信 4** | アラート + GitHub Actions 実行ログ |
 
 **対象日**: 前々日（JST）  
-**比較**: 前週同曜日（WoW）
+**比較**: 前年同曜日（対象日の364日前）
 
 Slack では Markdown 表が崩れるため、詳細は **箇条書き形式** で配信します。
 
@@ -97,8 +97,8 @@ tools/slack_client.py # Slack Web API 共通
 [`config/analytics_config.json`](../config/analytics_config.json) の `alerts.performance_threshold` を参照:
 
 - 直帰率 > 70%（サイト別）
-- セッション WoW -20% 超
-- EC 購入数 WoW -30% 超
+- セッション 前年比 -20% 超
+- EC 購入数 前年比 -30% 超
 
 ## Phase 2（未実装）
 

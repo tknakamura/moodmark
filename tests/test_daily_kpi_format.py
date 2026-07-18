@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Daily KPI Bot フォーマット・WoW 計算の単体テスト。"""
+"""Daily KPI Bot フォーマット・前年同曜日比較の単体テスト。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from tools.daily_kpi.format_slack import (
     build_reply_overview,
     build_slack_messages,
     fmt_metric_bullet,
-    fmt_wow_short,
+    fmt_yoy_short,
     fmt_yen,
     short_path,
 )
@@ -20,21 +20,21 @@ from tools.daily_kpi.ga4_collector import (
     RankedRow,
     SiteDayMetrics,
     get_report_dates,
-    wow_pct,
+    yoy_pct,
 )
 from tools.daily_kpi.notify import _split_text
 
 
-def test_wow_pct():
-    assert wow_pct(110, 100) == 10.0
-    assert wow_pct(90, 100) == -10.0
-    assert wow_pct(0, 0) == 0.0
-    assert wow_pct(50, 0) is None
+def test_yoy_pct():
+    assert yoy_pct(110, 100) == 10.0
+    assert yoy_pct(90, 100) == -10.0
+    assert yoy_pct(0, 0) == 0.0
+    assert yoy_pct(50, 0) is None
 
 
-def test_fmt_wow_short():
-    assert fmt_wow_short(110, 100) == "+10.0%"
-    assert fmt_wow_short(90, 100) == "-10.0%"
+def test_fmt_yoy_short():
+    assert fmt_yoy_short(110, 100) == "+10.0%"
+    assert fmt_yoy_short(90, 100) == "-10.0%"
 
 
 def test_fmt_yen():
@@ -46,8 +46,8 @@ def test_fmt_metric_bullet():
     line = fmt_metric_bullet("SS", 25550, 24980)
     assert line.startswith("• SS:")
     assert "*25,550*" in line
-    assert "前週 24,980" in line
-    assert "WoW +2.3%" in line
+    assert "前年 24,980" in line
+    assert "前年比 +2.3%" in line
 
 
 def test_short_path():
@@ -63,7 +63,7 @@ def test_get_report_dates():
     ref = datetime(2026, 7, 11, 10, 0, tzinfo=jst)
     report_date, compare_date = get_report_dates(ref)
     assert report_date == date(2026, 7, 9)
-    assert compare_date == date(2026, 7, 2)
+    assert compare_date == date(2025, 7, 10)
 
 
 def test_build_parent_message():

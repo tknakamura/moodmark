@@ -11,7 +11,7 @@ from tools.daily_kpi.ga4_collector import (
     DailyKpiReport,
     RankedRow,
     SiteDayMetrics,
-    wow_pct,
+    yoy_pct,
 )
 
 
@@ -37,16 +37,16 @@ def fmt_pct(value: float, digits: int = 2) -> str:
     return f"{value:.{digits}f}%"
 
 
-def fmt_wow(current: float, previous: float) -> str:
-    pct = wow_pct(current, previous)
+def fmt_yoy(current: float, previous: float) -> str:
+    pct = yoy_pct(current, previous)
     if pct is None:
-        return "WoW n/a"
+        return "前年比 n/a"
     sign = "+" if pct >= 0 else ""
-    return f"WoW {sign}{pct:.1f}%"
+    return f"前年比 {sign}{pct:.1f}%"
 
 
-def fmt_wow_short(current: float, previous: float) -> str:
-    pct = wow_pct(current, previous)
+def fmt_yoy_short(current: float, previous: float) -> str:
+    pct = yoy_pct(current, previous)
     if pct is None:
         return "n/a"
     sign = "+" if pct >= 0 else ""
@@ -85,13 +85,13 @@ def fmt_metric_bullet(
     previous: float,
     *,
     formatter: Callable[[float], str] = fmt_int,
-    show_wow: bool = True,
+    show_yoy: bool = True,
 ) -> str:
     cur_s = formatter(current)
     prev_s = formatter(previous)
-    if show_wow:
-        return f"• {label}: *{cur_s}*（前週 {prev_s} / WoW {fmt_wow_short(current, previous)}）"
-    return f"• {label}: *{cur_s}*（前週 {prev_s}）"
+    if show_yoy:
+        return f"• {label}: *{cur_s}*（前年 {prev_s} / 前年比 {fmt_yoy_short(current, previous)}）"
+    return f"• {label}: *{cur_s}*（前年 {prev_s}）"
 
 
 def fmt_rank_bullet(rank: int, label: str, parts: List[str]) -> str:
@@ -119,10 +119,10 @@ def build_parent_message(report: DailyKpiReport) -> str:
 
     ec_line = (
         f"EC: 購入 {fmt_int(ec.purchases)}件 / {fmt_yen(ec.purchase_revenue)} / "
-        f"CVR {fmt_pct(ec.purchase_cvr)}（{fmt_wow_short(ec.purchases, ec_prev.purchases)}）"
+        f"CVR {fmt_pct(ec.purchase_cvr)}（前年比 {fmt_yoy_short(ec.purchases, ec_prev.purchases)}）"
     )
     idea_line = (
-        f"IDEA: SS {fmt_int(idea.sessions)}（{fmt_wow_short(idea.sessions, idea_prev.sessions)}）"
+        f"IDEA: SS {fmt_int(idea.sessions)}（前年比 {fmt_yoy_short(idea.sessions, idea_prev.sessions)}）"
     )
     title = f"*MOO:D MARK Daily KPI（{d}）*"
     return f"{title}\n{ec_line} · {idea_line}"
@@ -143,14 +143,14 @@ def _site_metric_bullets(
             current.bounce_rate,
             previous.bounce_rate,
             formatter=_bounce_rate_fmt,
-            show_wow=False,
+            show_yoy=False,
         ),
         fmt_metric_bullet(
             "滞在",
             current.avg_session_duration,
             previous.avg_session_duration,
             formatter=fmt_duration,
-            show_wow=False,
+            show_yoy=False,
         ),
     ]
     if include_purchase:
@@ -296,16 +296,16 @@ def build_reply_alerts(report: DailyKpiReport, *, run_url: Optional[str] = None)
         if br > bounce_threshold:
             alerts.append(f"⚠️ {site_label} 直帰率が高い: {fmt_pct(br)}（閾値 {fmt_pct(bounce_threshold)}）")
 
-        wow_sessions = wow_pct(current.sessions, previous.sessions)
-        if wow_sessions is not None and wow_sessions <= session_drop_threshold:
+        yoy_sessions = yoy_pct(current.sessions, previous.sessions)
+        if yoy_sessions is not None and yoy_sessions <= session_drop_threshold:
             alerts.append(
-                f"⚠️ {site_label} セッション急落: {fmt_wow(current.sessions, previous.sessions)}"
+                f"⚠️ {site_label} セッション急落: {fmt_yoy(current.sessions, previous.sessions)}"
             )
 
-    wow_purchases = wow_pct(report.moodmark.purchases, report.moodmark_compare.purchases)
-    if wow_purchases is not None and wow_purchases <= purchase_drop_threshold:
+    yoy_purchases = yoy_pct(report.moodmark.purchases, report.moodmark_compare.purchases)
+    if yoy_purchases is not None and yoy_purchases <= purchase_drop_threshold:
         alerts.append(
-            f"⚠️ EC 購入数急落: {fmt_wow(report.moodmark.purchases, report.moodmark_compare.purchases)}"
+            f"⚠️ EC 購入数急落: {fmt_yoy(report.moodmark.purchases, report.moodmark_compare.purchases)}"
         )
 
     lines = ["*🔔 アラート・補足*", ""]

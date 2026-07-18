@@ -40,7 +40,7 @@ def main() -> int:
     offset = int(os.environ.get("MOODMARK_KPI_OFFSET_DAYS", "0") or "0")
     report_date, compare_date = get_report_dates(offset_days=offset)
 
-    print(f"Collecting Daily KPI: {report_date} vs {compare_date} (WoW)")
+    print(f"Collecting Daily KPI: {report_date} vs {compare_date} (YoY, 364 days)")
     report = collect_daily_kpi(report_date=report_date, compare_date=compare_date)
 
     if report.errors:

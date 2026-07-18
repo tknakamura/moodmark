@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""GA4 前々日・WoW 日次 KPI データ収集。"""
+"""GA4 前々日・前年同曜日比較の日次 KPI データ収集。"""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ JST = timezone(timedelta(hours=9))
 SITES = ("moodmark", "moodmarkgift")
 # GA4 日次確定の遅延を避けるため、毎朝 09:00 JST 時点では前々日を対象とする
 REPORT_LAG_DAYS = 2
+YEAR_OVER_YEAR_DAYS = 364
 
 
 @dataclass
@@ -76,14 +77,14 @@ def get_report_dates(
     *,
     offset_days: int = 0,
 ) -> tuple[date, date]:
-    """前々日（JST）と前週同曜日を返す。offset_days で対象日をさらに過去へずらせる（テスト用）。"""
+    """前々日（JST）と前年同曜日（364日前）を返す。"""
     now_jst = reference or datetime.now(JST)
     target = (now_jst - timedelta(days=REPORT_LAG_DAYS + offset_days)).date()
-    compare = target - timedelta(days=7)
+    compare = target - timedelta(days=YEAR_OVER_YEAR_DAYS)
     return target, compare
 
 
-def wow_pct(current: float, previous: float) -> Optional[float]:
+def yoy_pct(current: float, previous: float) -> Optional[float]:
     if previous == 0:
         if current == 0:
             return 0.0
@@ -353,7 +354,7 @@ def collect_daily_kpi(
     compare_date: Optional[date] = None,
     api: Optional[GoogleAPIsIntegration] = None,
 ) -> DailyKpiReport:
-    """前々日・WoW 比較の Daily KPI レポートを収集。"""
+    """前々日と前年同曜日を比較する Daily KPI レポートを収集。"""
     if report_date is None or compare_date is None:
         report_date, compare_date = get_report_dates()
 
