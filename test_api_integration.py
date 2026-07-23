@@ -19,7 +19,6 @@ except ImportError:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from analytics.google_apis_integration import GoogleAPIsIntegration
-from analytics.ai_analytics_chat import AIAnalyticsChat
 
 def test_api_integration(url: str):
     """
@@ -214,31 +213,6 @@ def test_api_integration(url: str):
             
     except Exception as e:
         print(f"✗ Page Speed Insightsデータ取得エラー: {e}")
-        import traceback
-        traceback.print_exc()
-    print()
-    
-    # AI Analytics Chatでの統合テスト
-    print("【ステップ5】AI Analytics Chatでの統合テスト")
-    print("-" * 80)
-    try:
-        ai_chat = AIAnalyticsChat()
-        
-        # テスト質問
-        test_question = f"このページのSEO改善点は？ {url}"
-        print(f"テスト質問: {test_question}")
-        print("分析中...")
-        print()
-        
-        # 分析実行（実際のAI呼び出しは行わず、データ取得のみ確認）
-        # 実際のAI呼び出しは時間がかかるため、ここではデータ取得の確認のみ
-        
-        print("✓ AI Analytics Chatの初期化成功")
-        print("  注意: 実際のAI分析は実行していません（時間がかかるため）")
-        print("  ダッシュボードで実際の分析を実行して、各APIが正しく連携されているか確認してください")
-        
-    except Exception as e:
-        print(f"✗ AI Analytics Chat初期化エラー: {e}")
         import traceback
         traceback.print_exc()
     print()
